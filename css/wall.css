@@ -1,0 +1,186 @@
+body{
+    //background: url(test.jpg) 30% 30%; 
+    background: rgba(100, 100, 100, 0);
+    overflow:hidden;
+}
+
+.current, .next{
+    width:100%;
+    height:100%;
+    position:absolute;
+    top:0;
+    left:0;
+}
+
+#google, .gcDay, .gcTime, .gcEvent, .gcLocation {
+    font-size: 19pt;
+}
+
+.gcDay {
+    padding-left:30px;
+}
+.current{
+    z-index:1;
+}
+.next{
+    z-index:0;
+}
+.control {
+    z-index:3;
+    position: absolute;
+    left: 50px;
+    top: 0px;
+    background: rgba(100, 100, 100, 0.75);
+    padding: 20px 50px 0 50px;
+    width: 200px;
+    height: 0;
+    overflow: hidden;
+}
+
+.control:hover {
+    height: auto;
+    width: 800px;
+    padding: 50px;
+    overflow: visible;
+}
+
+.fotoMode_title, .control_title {
+    text-align:left;
+}
+
+.control_dropdown {
+    width: 200px;
+}
+
+.symbol{
+    font-family: Symbola;
+    color:orange;
+}
+.world{
+    font-family: Symbola;
+    color:lightblue;
+}
+
+.addOn {
+    z-index:2;
+    border: none;
+    position: absolute;
+    font-size: 25pt;
+    font-family: sans-serif;
+    color: white;
+    padding:1px 10px;
+    overflow: hidden;
+    text-shadow:  1px  1px 1px black,
+                  1px -1px 1px black,
+                 -1px  1px 1px black,
+                 -1px -1px 1px black;
+}
+
+.input-group-addon{
+    width:auto!important;
+}
+
+.col-my-1{
+    width:calc(100%/12)!important;
+}
+
+.monitors{
+    width:1600px;
+    height:100%;
+    margin:0;
+    padding:0;
+    border:none;
+    display: inline-block;
+    position:relative;
+    overflow:hidden;
+}
+
+@keyframes circle {
+    from { transform:rotate(0deg); }
+    to { transform:rotate(360deg); }
+}
+
+@keyframes inner-circle {
+    from { transform:rotate(0deg); }
+    to { transform:rotate(-360deg); }
+}
+
+.collage{
+    position:absolute;
+    /*animation: circle 50s linear infinite;
+    transform-origin:0 50px;*/
+    left:50%;
+    top:50%;
+}
+
+.inner{
+    animation: inner-circle 50s linear infinite;
+}
+
+.collage img{
+    border:2px solid white;
+    box-shadow: 10px 10px 25px 0px rgba(0,0,0,0.59);
+}
+
+.s404{
+    color: red;
+    font-size: 12pt;
+    text-shadow:  none;    
+}
+
+#manosL, #manosV{
+    font-size: 15pt;
+}
+
+.col-my-2{
+    width:calc(100%/6)!important;
+}
+
+.col-my-3{
+    width:calc(100%/4)!important;
+}
+
+.col-my-4{
+    width:calc(100%/3)!important;
+}
+
+.col-my-5{
+    width:calc(5*100%/12)!important;
+}
+
+.col-my-6{
+    width:calc(100%/2)!important;
+}
+
+.col-my-8{
+    width:calc(8*100%/12)!important;
+}
+
+.col-my-9{
+    width:calc(3*100%/4)!important;
+}
+
+.my-right{
+    text-align:right;
+}
+
+.my-left{
+    text-align:left;
+}
+
+div.input-group{
+    width:100%;
+}
+.input-group-btn button{
+    width:100%;
+}
+
+.controlTitle{
+    font-size: 15pt;
+    font-family: sans-serif;
+    color: white;
+    text-shadow:  1px  1px 1px black,
+                  1px -1px 1px black,
+                 -1px  1px 1px black,
+                 -1px -1px 1px black;
+}

@@ -5,6 +5,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+panos/
+fotos/
+
 # Runtime data
 pids
 *.pid
@@ -57,3 +60,11 @@ typings/
 # dotenv environment variables file
 .env
 
+/data/control.csv
+*.bak
+/data/manos.html
+/data/geburtstage.csv
+/data/geburtstage.txt
+/data/fotos.js
+/token/myToken.json
+/nwjs-sdk-v0.14.7-win-ia32

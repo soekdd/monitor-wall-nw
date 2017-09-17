@@ -1,0 +1,10 @@
+var fotos = [
+    {
+        "priority": 1,
+        "type": "P",
+        "seasons": "fenm",
+        "group": "own",
+        "file": "test.jpg",
+        "title": "test"
+    }   
+]

@@ -1,0 +1,27 @@
+{
+  "name": "wall",
+  "main": "index.html",
+  "window": {
+    "frame": false,
+    "toolbar": false,
+    "transparent": false
+  },
+  "webkit": {
+    "plugin": true
+  },
+  "dependencies": {
+    "finalhandler": "^1.0.3",
+    "fs": "0.0.1-security",
+    "google-auth-library": "^0.10.0",
+    "googleapis": "^19.0.0",
+    "http": "0.0.0",
+    "nw": "^0.23.4",
+    "serve-static": "^1.12.3",
+    "child_process":"^1.0.2"
+  },
+  "version": "1.0.0",
+  "devDependencies": {},
+  "author": "soek",
+  "license": "ISC",
+  "description": ""
+}
