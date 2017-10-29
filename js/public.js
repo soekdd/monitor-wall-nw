@@ -1,5 +1,6 @@
 /*global positions, $, persData, fotoModeContent, addOnControlContent, taggingContent, fotos*/
-
+var lastPersData = '';
+var lastFotos = '';
 function generator(name, after) {
     //var generic = 'var ' + name + '= function(){';
     var generic = "var request = 'http://"+window.location.hostname+":8080/ws/" + name + "/'+Array.from(arguments).join('/');"
@@ -10,12 +11,26 @@ function generator(name, after) {
     return generic;
 }
 
+function getPersData() {
+    var request = 'http://'+window.location.hostname+':8080/ws/';
+    $.get(request).success(function(data) {
+        if (lastPersData!=data) {
+            persData=JSON.parse(data);
+            lastPersData=data;
+            refresh();
+        }
+    });
+}
+
 
 function getFotos() {
     var request = 'http://'+window.location.hostname+':8080/getFotos';
     $.get(request).success(function(data) {
-        fotos = JSON.parse(data);
-        refresh();
+        if (lastFotos!=data) {
+            fotos = JSON.parse(data);
+            lastFotos=data;
+            refresh();
+        }
     });
 }
 
@@ -24,11 +39,6 @@ function startCopy() {
     $.get(request);
 }
 
-
-/*
-var toggleAddOn = new Function(generator('toggleAddOn'));
-var setFotoIndex = new Function(generator('setFotoIndex'));
-*/
 
 function refresh() {
     $('#placeholder').html('<div id="fotoMode">' + fotoModeContent() + '</div>' +
@@ -50,4 +60,6 @@ function main() {
         window[func] = new Function(generator(func,'getFotos'));
     });
     refresh();
+    setInterval(getPersData,1000);
+    setInterval(getFotos,10500);
 }

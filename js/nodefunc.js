@@ -163,15 +163,13 @@ if (typeof require === "function") {
         });
     });
 
-
-
     node.setPos = function() {
         var win = gui.Window.get();
         win.x = 0;
         win.y = 0;
         win.width = 6400;
         win.height = 900;
-        win.setAlwaysOnTop(true);
+        win.setAlwaysOnTop(false);
     }
     node.setPos();
     node.storeData = function() {
@@ -179,8 +177,14 @@ if (typeof require === "function") {
         fs.writeFileSync('data/data.js', 'var persData = ' + JSON.stringify(persData));
     };
     node.storeFotos = function() {
+        let toStore = {};
+        fotos.forEach((element,index)=>{
+            toStore[element.title.toUpperCase()+'_'+index]=element;
+        });
+        let persFotos = [];
+        Object.keys(toStore).sort().forEach((key)=>{persFotos.push(toStore[key]);});
         fs.renameSync('data/fotos.js', 'data/fotos.bak');
-        fs.writeFileSync('data/fotos.js', 'var fotos = ' + JSON.stringify(fotos));
+        fs.writeFileSync('data/fotos.js', 'var fotos = ' + JSON.stringify(persFotos));
     };
     node.getFotosForCollage = function(collage) {
         var dummy = [];

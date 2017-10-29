@@ -45,8 +45,9 @@ function refreshAddOnControl() {
 function toggleFotoMode(type) {
     if (persData.currentMode == type) return;
     persData.currentMode = type;
-
-    if (type != 'A' && type != fotos[persData.current].type) {
+    if (type == 'R' ) {
+        
+    } else if (type != 'A' && type != fotos[persData.current].type) {
         let i = 0;
         while (i < fotos.length && fotos[i].type != type) {
             i++;
@@ -281,12 +282,12 @@ function startChange(preset) {
         nextDiv.removeAttr("style");
         nextDiv.css('background', 'url("panos/' + fotos[persData.current].file + '")').waitForImages(function() {
             addOns['title'].content('#title');
-            currentDiv.fadeOut(3000, function() {
+            currentDiv.fadeOut(300, function() {
                 currentDiv.removeClass('current');
                 currentDiv.addClass('next');
                 nextDiv.removeClass('next');
                 nextDiv.addClass('current');
-            })
+            });
         }, $.noop, true);
     }
     else if (fotos[persData.current].type == 'C') {
@@ -314,7 +315,7 @@ function startChange(preset) {
         nextDiv.css('background', 'rgba(0,0,0,100)');
         nextDiv.html(s).waitForImages(function() {
             addOns['title'].content('#title');
-            currentDiv.fadeOut(3000, function() {
+            currentDiv.fadeOut(300, function() {
                 currentDiv.removeClass('current');
                 currentDiv.addClass('next');
                 nextDiv.removeClass('next');
@@ -325,13 +326,15 @@ function startChange(preset) {
 }
 
 function everySecond() {
+    //return;
     if (persData.currentMode == 'A') {
         var now = new Date();
         let changeTime = persData.changeTime;
-        if (fotos[persData.current].type == 'C') changeTime += changeTime;
+        if (fotos[persData.current].type == 'C') changeTime = 2*persData.changeTime;
         if (now - lastChange > changeTime * 1000) {
             lastChange = now;
             startChange(null);
+            return;
         }
     }
     if (fotos[persData.current].type == 'C') {
@@ -388,6 +391,8 @@ function mainContent() {
 
 function handleRequest(request, response) {
     var params = request.url.split("/");
+    response.setHeader("Access-Control-Allow-Origin", "*");
+    response.setHeader("Cache-Control", "no-cache ");
     // /ws/order
     if (params[1] == 'ws') {
         ['setGroupToFoto','toggleFotoMode', 'toggleAddOn', 'setFotoIndex', 'setAddOnPosition', 'setAddOnMonitor', 'toggleFotoMode', 'setFotoGroup', 'startChange', 'setChangeTime', 'setFotoTitle', 'setAllSeasons', 'setPriority', 'setSeason', 'setDayTime', 'setAllTimes'].forEach(function(func) {
@@ -407,8 +412,9 @@ function handleRequest(request, response) {
                     args.push(params[i]);
                 }
                 window[params[2]](args);*/
-                response.end(JSON.stringify(persData));
-            }
+                //response.end(JSON.stringify(persData));
+            };   
+            response.end(JSON.stringify(persData));
         });
     } else if (params[1] == 'getFotos') {
         response.end(JSON.stringify(fotos));

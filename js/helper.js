@@ -46,22 +46,26 @@ function manos(klasse, callback) {
     $.get("http://www.manos-dresden.de/aktuelles/quellen/VPlan_Schueler.html").success(function (data) {
         //$.get("http://localhost/Wall_copy/1/manos.html", function(data) {
         var match;
+        var hits = [];
         while ((match = regex.exec(data)) !== null) {
             if (match.index === regex.lastIndex) {
                 regex.lastIndex++;
             }
             var klasses = match[1].split(",");
-            s += match[1];
+            //s += match[1];
             if (klasses.indexOf(klasse) > -1) {
                 var s = match[2]; //Stunde
                 s += '|' + match[3]; // Fach
                 //s += '|'+matches[4][i];                 //Lehrer
                 //s += '|'+matches[5][i];                 //Raum
                 s += '|' + match[6];
-                return callback(klasse + ':&nbsp;' + s);
+                hits.push(s);
             }
         }
-        callback(klasse + ':&nbsp;keine Vertretungen' + s);
+        if (hits.length==0)
+            callback(klasse + ':&nbsp;keine Vertretungen');
+        else 
+            callback(klasse + ':&nbsp;' + hits.join('&nbsp;/&nbsp;&nbsp;'));
     }).error(function (jqXHR, textStatus, errorThrown) {
         callback('<span class="s404">' + klasse + ':&nbsp;Vertretungsplan konnte nicht geladen werden</span>');
     });;

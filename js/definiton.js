@@ -1,6 +1,6 @@
 /*global $,nll,fotos,persData,node,isEastern,isXmas,getMonth,getHour,manos*/
 var settings = {
-    mon_width: 1600,
+    mon_width: 400,
     mon_height: 900
 };
 var addOns = {
@@ -51,7 +51,7 @@ var addOns = {
         update:600,
         name: "Vertretungsplan Lenny",
         content: function(id) {
-            manos('7b',function(s){$(id).html(s)});
+            manos('7a',function(s){$(id).html(s)});
         }
     },
     weather: {

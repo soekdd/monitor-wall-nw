@@ -36,12 +36,16 @@ function fotoModeContent() {
     fotos.forEach(function(foto) {
         groupsCounter[foto.group]++;
     });
-	if (fotos.indexOf(persData.current)==-1) {
+	if (fotos[persData.current]==null || fotos[persData.current]==undefined) {
 		persData.current=0;
 	}
     [{
         title: 'Collage',
         type: 'C',
+        group: 0
+    },{
+        title: 'Raw Pictures',
+        type: 'R',
         group: 0
     }, {
         title: 'Panorama',
