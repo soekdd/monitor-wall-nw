@@ -269,7 +269,7 @@ function twoMaxRandom(factor) {
 
 function startChange(preset) {
     node.setPos();
-    if (preset == null || preset == '')
+    if (preset === null || preset === '')
         persData.current = findeNext();
     else
         persData.current = preset;
@@ -281,6 +281,24 @@ function startChange(preset) {
         nextDiv.html('');
         nextDiv.removeAttr("style");
         nextDiv.css('background', 'url("panos/' + fotos[persData.current].file + '")').waitForImages(function() {
+            addOns['title'].content('#title');
+            currentDiv.fadeOut(300, function() {
+                currentDiv.removeClass('current');
+                currentDiv.addClass('next');
+                nextDiv.removeClass('next');
+                nextDiv.addClass('current');
+            });
+        }, $.noop, true);
+    }
+    else if (fotos[persData.current].type == 'R') {
+        var s = '';
+        for (var i = 0; i < 4; i++) {
+            s += '<div class="rawImageParts" id="rawImagePart'+i+'" style="background-image:url(\'raws/' + fotos[persData.current].file + '\')"></div>';
+        }
+        nextDiv.html('');
+        nextDiv.removeAttr("style");
+        nextDiv.css('background', 'rgba(0,0,0,100)');
+        nextDiv.html(s).waitForImages(function() {
             addOns['title'].content('#title');
             currentDiv.fadeOut(300, function() {
                 currentDiv.removeClass('current');

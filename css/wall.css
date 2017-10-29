@@ -4,6 +4,44 @@ body{
     overflow:hidden;
 }
 
+.rawImageParts {
+    background-size:420%;
+    background-position-y:center;
+    background-repeat:no-repeat;
+    width:1600px;
+    height:900px;
+    position:absolute;
+    top:0px;
+  /*  animation: 120s ease 0s normal none infinite animate;*/
+    /*border:red 1px solid;*/
+}
+
+@keyframes animate {
+	from {background-position-y:0%}
+	50% {background-position-y:100%}
+	to {background-position-y:0%}
+}
+
+#rawImagePart0 {
+    background-position-x:0%;
+    left:0px;
+}
+
+#rawImagePart1 {
+    background-position-x:33%;
+    left:1600px;
+}
+
+#rawImagePart2 {
+    background-position-x:66%;
+    left:3200px;
+}
+
+#rawImagePart3 {
+    background-position-x:99%;
+    left:4800px;
+}
+
 .current, .next{
     width:100%;
     height:100%;

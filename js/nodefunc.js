@@ -167,7 +167,7 @@ if (typeof require === "function") {
         var win = gui.Window.get();
         win.x = 0;
         win.y = 0;
-        win.width = 6400;
+        win.width = 1800;
         win.height = 900;
         win.setAlwaysOnTop(false);
     }
@@ -206,6 +206,23 @@ if (typeof require === "function") {
                 fotos.push({
                     "priority": "3",
                     "type": "C",
+                    "seasons": "",
+                    "group": "",
+                    "file": file,
+                    "title": file
+                });
+            }
+        });
+        filesF = fs.readdirSync('./raws/');
+        filesF.forEach(function(file) {
+            var found = false;
+            for (var i = 0; i < fotos.length; i++) {
+                found = found || (file == fotos[i].file);
+            }
+            if (!found && (['.', '..'].indexOf(file) == -1)) {
+                fotos.push({
+                    "priority": "3",
+                    "type": "R",
                     "seasons": "",
                     "group": "",
                     "file": file,
