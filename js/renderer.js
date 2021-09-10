@@ -1,7 +1,9 @@
-/*global persData, addOns, positions, monitors, settings, $, node, fotos, groups, seasons, daytime, addOnControlContent, taggingContent, fotoModeContent*/
+/*global persData, addOns, positions, monitors, settings, $, node, fotos, groups, seasons, daytime, addOnControlContent, taggingContent, fotoModeContent, loadManos */
 "use strict";
+
 var lastChange = new Date();
 var zCounter = 0;
+var cTimer = 0;
 var cCounter = 0;
 var cFotos = [];
 
@@ -259,17 +261,27 @@ function findeNext() {
 }
 
 function twoMaxRandom(factor) {
-    if (Math.random() < 0.5) {
-        return Math.round(factor * (Math.random() * Math.random()) / 2);
-    }
-    else {
-        return Math.round(factor * (0.5 + (Math.random() * Math.random()) / 2));
-    }
+    var sig = (Math.random() < 0.5)?1:-1;
+    return sig*(factor * (1-Math.random() * Math.random()));
+}
+
+function createCSS(j,max){
+    var css = '';
+    max = max == undefined ? 40 : max;
+    j = j == undefined ? max : j;
+    zCounter++;
+    //css += 'animation-delay:-' + Math.round(Math.random() * 50) + 's;';
+    //css += 'filter: brightness(' + Math.round(80 * (j  + 1) / max + 20) + '%);'
+    css += 'transform:rotate('+Math.round(Math.random()*30-15)+'deg) translate(-50%,-50%);'
+    css += 'z-index:' + zCounter + ';';
+    css += 'left:' + (twoMaxRandom(30) + 50) + '%;';
+    css += 'top:' + (twoMaxRandom(25) + 50) + '%;';
+    return css;
 }
 
 function startChange(preset) {
     node.setPos();
-    if (preset === null || preset === '')
+    if (preset == null || preset == '')
         persData.current = findeNext();
     else
         persData.current = preset;
@@ -282,7 +294,7 @@ function startChange(preset) {
         nextDiv.removeAttr("style");
         nextDiv.css('background', 'url("panos/' + fotos[persData.current].file + '")').waitForImages(function() {
             addOns['title'].content('#title');
-            currentDiv.fadeOut(300, function() {
+            currentDiv.fadeOut(settings.fade, function() {
                 currentDiv.removeClass('current');
                 currentDiv.addClass('next');
                 nextDiv.removeClass('next');
@@ -300,7 +312,7 @@ function startChange(preset) {
         nextDiv.css('background', 'rgba(0,0,0,100)');
         nextDiv.html(s).waitForImages(function() {
             addOns['title'].content('#title');
-            currentDiv.fadeOut(300, function() {
+            currentDiv.fadeOut(settings.fade, function() {
                 currentDiv.removeClass('current');
                 currentDiv.addClass('next');
                 nextDiv.removeClass('next');
@@ -308,23 +320,31 @@ function startChange(preset) {
             });
         }, $.noop, true);
     }
+    else if (fotos[persData.current].type == 'I') {
+        var s = fs.readFileSync('iframes/'+fotos[persData.current].file, "utf8", function(err, data) {console.log(err)});
+        nextDiv.html(s);
+        nextDiv.removeAttr("style");
+        addOns['title'].content('#title');
+        currentDiv.fadeOut(settings.fade, function() {
+            currentDiv.removeClass('current');
+            currentDiv.addClass('next');
+            nextDiv.removeClass('next');
+            nextDiv.addClass('current');
+        });
+    }
     else if (fotos[persData.current].type == 'C') {
         cFotos = node.getFotosForCollage(fotos[persData.current].file);
+        shuffleArray(cFotos);
         var s = '';
-        zCounter = 0;
+        cCounter = 0;
         var l = Math.trunc(cFotos.length / 4);
         for (var i = 0; i < 4; i++) {
             var max = (l > 40 ? 40 : l);
             s += '<div class="monitors">';
             for (var j = 0; j < max; j++) {
-                zCounter++;
-                var css = '';
-                css += 'filter: brightness(' + Math.round(80 * (j + 1) / max + 20) + '%);'
-                css += 'z-index:' + zCounter + ';';
-                css += 'left:' + (twoMaxRandom(60) + 20) + '%;';
-                css += 'top:' + (twoMaxRandom(40) + 30) + '%;';
-                css += 'transform: rotate(' + Math.round(Math.random() * 20 - 10) + 'deg) translate(-50%, -50%)';
-                s += '<div style="' + css + '" class="collage"><image src="./fotos/' + fotos[persData.current].file + '/' + cFotos[i * l + Math.round(Math.random() * l)] + '"></div>';
+                cCounter++;
+                var css = createCSS(j,max);
+                s += '<div style="' + css + '" class="collage"><image src="./fotos/' + fotos[persData.current].file + '/' + cFotos[cCounter] + '"></div>';
             }
             s += '</div>';
         }
@@ -333,7 +353,7 @@ function startChange(preset) {
         nextDiv.css('background', 'rgba(0,0,0,100)');
         nextDiv.html(s).waitForImages(function() {
             addOns['title'].content('#title');
-            currentDiv.fadeOut(300, function() {
+            currentDiv.fadeOut(settings.fade, function() {
                 currentDiv.removeClass('current');
                 currentDiv.addClass('next');
                 nextDiv.removeClass('next');
@@ -356,16 +376,23 @@ function everySecond() {
         }
     }
     if (fotos[persData.current].type == 'C') {
-        cCounter++;
-        if (cCounter > 20) {
-            cCounter = 0;
-            var c = document.getElementsByClassName('collage');
-            zCounter++;
-            //$(c[Math.trunc(Math.random() * c.length)]).css('z-index', zCounter);
-            $(c[Math.trunc(Math.random() * c.length)]).attr('style', 'opacity:100%;z-index:' + zCounter + ';left:' + Math.round(Math.random() * 60 + 20) + '%;top:' + Math.round(Math.random() * 40 + 30) + '%;transform: translate(-50%, -50%) rotate(' + Math.round(Math.random() * 20 - 10) + 'deg)');
+        cTimer++;
+        if (cTimer > 10) {            
+            let c = document.querySelectorAll('.collage');
+            // try to reload broken images
+            [...c].forEach(e=>{
+                if (!e.children[0].complete || e.children[0].naturalWidth===0)
+                       $(e).children().attr('src',$(e).children().attr('src')+'?'+Date.now());
+            });
+            cTimer = 0;
+            cCounter++;
+            if (cCounter>=cFotos.length) cCounter=0;
+            let index = Math.trunc(Math.random() * c.length);
+            $(c[index]).children().attr('src','./fotos/' + fotos[persData.current].file + '/' + cFotos[cCounter]);
+            setTimeout(()=>$(c[index]).attr('style', createCSS()),2000);
         }
     }
-    //node.setPos();
+    //node.setPos()
 }
 
 function refreshAddOns() {
@@ -451,6 +478,10 @@ function handleRequest(request, response) {
 
 function main() {
     node.initialCheck();
+    node.initMPD();
+    // loadManos();
+    setInterval(everySecond, 1000);
+    node.setWebserver(handleRequest);
     $('body').html(mainContent());
     refreshFotoMode();
     refreshAddOnControl();
@@ -460,6 +491,4 @@ function main() {
         startChange();
     else
         startChange(persData.current);
-    setInterval(everySecond, 1000);
-    node.setWebserver(handleRequest);
 }

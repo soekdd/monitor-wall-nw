@@ -143,7 +143,7 @@ function listEvents(auth) {
                 }
                 var day = nll(startDate.getDate())+'.'+nll(startDate.getMonth()+1)+'.'+nll(startDate.getFullYear());
                 if (days[day] == null) {
-                    days[day] = {};
+                    days[day] = {dayOfTheWeek:['So','Mo','Di','Mi','Do','Fr','Sa'].startDate.getDay()};
                 }  
                 if (!('list' in days[day])) {
                     days[day].list = [];
@@ -164,13 +164,14 @@ function listEvents(auth) {
             console.log(JSON.stringify(days));
             var s='';
             for (var day in days){
-                s += '<span class="gcDay">'+day+'</span> ';
+                s += '<span class="gcDay">'+days[day].dayOfTheWeek+':&nbsp;'+day+'</span> ';
                 if (days[day].list.length>0) {
                     days[day].list.forEach(function(e){
                         s += '<span class="gcEvent">'+e.text+'</span> ';
                         if (e.loc!=null)
                             s += '<span class="gcLocation">'+e.loc+'</span> ';
                     });
+					s += '&nbsp;|&nbsp;';
                 }
                 if (Object.keys(days[day].times).length>0) {
                     Object.keys(days[day].times).forEach(function(e){
@@ -179,6 +180,7 @@ function listEvents(auth) {
                         if (days[day].times[e].loc!=null)
                             s += '<span class="gcLocation">'+days[day].times[e].loc+'</span> ';
                     });
+					s += '&nbsp;|&nbsp;';
                 }
             }
             console.log(s);

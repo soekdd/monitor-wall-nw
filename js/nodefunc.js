@@ -6,6 +6,7 @@ if (typeof require === "function") {
         module = undefined;
     }
     var fs = require('fs');
+    var MPD = require('./js/mpd').MPD;
     var gui = require('nw.gui');
     var {spawn} = require('child_process');
     var google = require('googleapis');
@@ -66,7 +67,7 @@ if (typeof require === "function") {
                     }
                     day = nll(startDate.getDate()) + '.' + nll(startDate.getMonth() + 1) + '.' + (startDate.getYear()-100);
                     if (days[day] == null) {
-                        days[day] = {};
+						days[day] = {'dayOfTheWeek':['<span style="color:orange;">So</span>','Mo','Di','Mi','Do','Fr','<span style="color:orange;">Sa</span>'][startDate.getDay()]};
                     }
                     if (!('list' in days[day])) {
                         days[day].list = [];
@@ -79,16 +80,20 @@ if (typeof require === "function") {
                         location = node.quoteUniCode(event.location.split(',')[0]);
                     }
                     if ("dateTime" in event.start) {
-                        days[day].times[time] = {
-                            text: node.quoteUniCode(event.summary),
-                            loc: location
-                        };
+                        if (event.summary.search("//")==-1) {                        
+                            days[day].times[time] = {
+                                text: node.quoteUniCode(event.summary),
+                                loc: location
+                            };
+                        }
                     }
                     else {
-                        days[day].list.push({
-                            text: node.quoteUniCode(event.summary),
-                            loc: location
-                        });
+                        if (event.summary.search("//")==-1) {                        
+                            days[day].list.push({
+                                text: node.quoteUniCode(event.summary),
+                                loc: location
+                            });
+                        }
                     }
                 }
                 var s = '';
@@ -98,27 +103,25 @@ if (typeof require === "function") {
                 /*if (counter+1 < max) {
                     counter++;*/
                 {
-                    s += '<span class="gcDay">' + day + '</span> ';
+                    s += '<span class="gcWeekD">' + days[day].dayOfTheWeek+'</span><span class="gcDay">' + day + '</span> ';
                     if (days[day].list.length > 0) {
                         days[day].list.forEach(function(e) {
-                            /*if (counter < max) {
-                                counter++;*/
                             s += '<span class="gcEvent">' + e.text + '</span> ';
                             if (e.loc != null)
                                 s += '<span class="symbol">&#127757;&nbsp;</span><span class="gcLocation">' + e.loc + '</span > ';
-                                //}
-                        });
+							s += '|&nbsp;';
+                        });						
                     }
                     if (Object.keys(days[day].times).length > 0) {
                         Object.keys(days[day].times).forEach(function(e) {
-                            /*if (counter < max) {
-                                counter++;*/
-                            s += '<span class="gcTime">' + e + '</span> ';
-                            s += '<span class="gcEvent">' + days[day].times[e].text + '</span> ';
-                            if (days[day].times[e].loc != null)
-                                s += '<span class="world">&#127757;&nbsp;</span><span class="gcLocation">' + days[day].times[e].loc + '</span > ';
-                                //}
-                        });
+//                            if (days[day].times[e].text.search("\/\/")>-1) {
+                                s += '<span class="gcTime">' + e + '</span> ';
+                                s += '<span class="gcEvent">' + days[day].times[e].text + '</span> ';
+                                if (days[day].times[e].loc != null)
+                                    s += '<span class="world">&#127757;&nbsp;</span><span class="gcLocation">' + days[day].times[e].loc + '</span > ';
+								s += '|&nbsp;';
+//                            }
+                        });						
                     }
                     s += '<br>';
                 }
@@ -167,7 +170,7 @@ if (typeof require === "function") {
         var win = gui.Window.get();
         win.x = 0;
         win.y = 0;
-        win.width = 1800;
+        win.width = 6400;
         win.height = 900;
         win.setAlwaysOnTop(false);
     }
@@ -195,6 +198,22 @@ if (typeof require === "function") {
         });
         return dummy;
     };
+
+    node.initMPD = function(){
+        console.log('start to init mpd connection');
+        node.mpdClient = new MPD({
+            host : settings.mpdHost,
+            port : settings.mpdPort
+        });
+        node.mpdClient.on("ready", function() {
+            console.log('mpd connected');
+        }.bind(this));
+        node.mpdClient.on("error", function(e) {
+            console.log('Error: '+e);
+        }.bind(this));
+        node.mpdClient.restoreConnection(); 
+    };
+
     node.initialCheck = function() {
         var filesF = fs.readdirSync('./fotos/');
         filesF.forEach(function(file) {
@@ -206,6 +225,23 @@ if (typeof require === "function") {
                 fotos.push({
                     "priority": "3",
                     "type": "C",
+                    "seasons": "",
+                    "group": "",
+                    "file": file,
+                    "title": file
+                });
+            }
+        });
+        filesF = fs.readdirSync('./iframes/');
+        filesF.forEach(function(file) {
+            var found = false;
+            for (var i = 0; i < fotos.length; i++) {
+                found = found || (file == fotos[i].file);
+            }
+            if (!found && (['.', '..'].indexOf(file) == -1)) {
+                fotos.push({
+                    "priority": "3",
+                    "type": "I",
                     "seasons": "",
                     "group": "",
                     "file": file,
@@ -248,8 +284,8 @@ if (typeof require === "function") {
             }
         });
         for (var i = 0; i < fotos.length; i++) {
-            if (filesP.indexOf(fotos[i].file) == -1 && fotos[i].type == 'P') {
-                console.log(fotos[i].file + ' not found!');
+            if ((!fotos[i].hasOwnProperty('title')) || (filesP.indexOf(fotos[i].file) == -1 && fotos[i].type == 'P')) {
+                //console.log(fotos[i].file + ' not found!');
                 fotos.splice(i, 1);
                 i--;
             }

@@ -3,6 +3,13 @@
 function addOnControlContent() {
     var s = '';
     for (var addOnKey in addOns) {
+        if (persData.addOns[addOnKey] == undefined)
+            persData.addOns[addOnKey] = {
+                display:0,
+                name:addOnKey,
+                pos:'or',
+                monitor:'m1'
+            };
         s += '<div class="input-group" role="group">';
         s += '<span class="input-group-addon control_title col-my-5">' + addOns[addOnKey].name + '</span>';
         s += '<span class="input-group-addon col-my-1"><input onchange="toggleAddOn(\'' + addOnKey + '\',\'' + (persData.addOns[addOnKey].display == 1 ? 0 : 1) + '\')" type="checkbox"' + (persData.addOns[addOnKey].display == 1 ? ' checked="checked"' : '') + '></span>';
@@ -51,6 +58,10 @@ function fotoModeContent() {
         title: 'Panorama',
         type: 'P',
         group: 1
+    }, {
+        title: 'IFrame',
+        type: 'I',
+        group: 0
     }, {
         title: 'Automatic',
         type: 'A',

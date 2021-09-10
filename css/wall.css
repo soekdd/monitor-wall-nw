@@ -4,6 +4,22 @@ body{
     overflow:hidden;
 }
 
+#child3{
+	color:lightblue;
+}
+
+#child2{
+	color:lightgreen;
+}
+
+#child1{
+	color:lightgray;
+}
+.cover{
+  width:100px;
+  vertical-align: baseline;
+  margin-right: 10px;
+}
 .rawImageParts {
     background-size:420%;
     background-position-y:center;
@@ -12,7 +28,7 @@ body{
     height:900px;
     position:absolute;
     top:0px;
-  /*  animation: 120s ease 0s normal none infinite animate;*/
+    animation: 330s ease 0s normal none infinite animate;
     /*border:red 1px solid;*/
 }
 
@@ -55,7 +71,12 @@ body{
 }
 
 .gcDay {
-    padding-left:30px;
+    width:100px;
+	display:inline-block;
+}
+.gcWeekD {
+    width: 40px;
+    display:inline-block;
 }
 .current{
     z-index:1;
@@ -80,6 +101,10 @@ body{
     width: 800px;
     padding: 50px;
     overflow: visible;
+}
+
+#soccer img{
+    height:30px;
 }
 
 .fotoMode_title, .control_title {
@@ -127,28 +152,29 @@ body{
     height:100%;
     margin:0;
     padding:0;
-    border:none;
+    border:none;/*1px solid white;*/
     display: inline-block;
     position:relative;
     overflow:hidden;
 }
 
 @keyframes circle {
-    from { transform:rotate(0deg); }
-    to { transform:rotate(360deg); }
+    0%, 50% { transform:rotate(-10deg); }
+    25%, 75% { transform:rotate(10deg); }
 }
 
 @keyframes inner-circle {
-    from { transform:rotate(0deg); }
-    to { transform:rotate(-360deg); }
+    from { transform:rotate(-10deg); }
+    to { transform:rotate(10deg); }
 }
 
 .collage{
     position:absolute;
-    /*animation: circle 50s linear infinite;
-    transform-origin:0 50px;*/
-    left:50%;
-    top:50%;
+    /*animation: circle 240s ease infinite;*/
+    background-color: #abc;
+    transform:translate(-50%,-50%);
+    transform-origin:50% 50%;
+    height:45vh;
 }
 
 .inner{
@@ -156,7 +182,9 @@ body{
 }
 
 .collage img{
+    height: 100%;
     border:2px solid white;
+    /*transform: translate(-50%,-50%);*/
     box-shadow: 10px 10px 25px 0px rgba(0,0,0,0.59);
 }
 
@@ -166,7 +194,7 @@ body{
     text-shadow:  none;    
 }
 
-#manosL, #manosV{
+#manos{
     font-size: 15pt;
 }
 
