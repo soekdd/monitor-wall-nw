@@ -86,7 +86,7 @@ function cleanString(s){
 function vitztXMLFile(callback){
      $.ajax({
         type: "GET",
-        url: 'https://'+settings['vitzAuth']+'@www.stundenplan24.de/10223946/vplan/vdaten/VplanKl.xml',
+        url: 'https://'+settings['vitztAuth']+'@www.stundenplan24.de/10223946/vplan/vdaten/VplanKl.xml',
         dataType: "xml",
         error: function (e) {
             callback(null);
@@ -100,7 +100,7 @@ function vitztXMLFile(callback){
 function vitztGet(klasse, xmlFile, callback){
         $.ajax({
         type: "GET",
-        url: 'https://'+settings['vitzAuth']+'@www.stundenplan24.de/10223946/vplan/vdaten/'+xmlFile,
+        url: 'https://'+settings['vitztAuth']+'@www.stundenplan24.de/10223946/vplan/vdaten/'+xmlFile,
         dataType: "xml",
 
         error: function (e) {
