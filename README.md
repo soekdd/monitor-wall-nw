@@ -27,9 +27,13 @@ npm run build
 npm start                  # Electron mit gebautem Frontend
 npm run start:web          # Gebautes Frontend ohne Electron
 npm run dist               # Installer für das aktuelle Betriebssystem
+npm run lint               # JavaScript und Vue prüfen
+npm run lint:fix           # Automatisch korrigierbare Regelverstöße beheben
 npm test                   # Backendtests
 npm run test:electron      # UI-Smoke-Test in der Electron-Laufzeit
 ```
+
+ESLint prüft die aktuelle Anwendung einschließlich Server, Electron und Tests. `old/`, lokale Daten und Zugangsdaten sowie generierte Dateien sind ausgeschlossen. Die Formatregeln verwenden Tabs und doppelte Anführungszeichen; `npm run lint -- --fix` funktioniert ebenfalls. Nicht automatisch korrigierbare Probleme müssen anhand der ESLint-Meldungen behoben werden.
 
 Falls eine npm-Konfiguration Installationsskripte blockiert und die Electron-Laufzeit fehlt: `node node_modules/electron/install.js` nachholen. Installer sind vorbereitet; plattformübergreifende Builds und Signierung benötigen die jeweiligen Toolchains/Zertifikate.
 

@@ -1,22 +1,90 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
-import { mkdtemp,readFile,rm } from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-import net from 'node:net';
-import { defaults } from '../server/defaults.js';
-import { JsonStore } from '../server/store.js';
-import { configSchema } from '../server/schema.js';
-import { eligibleScenes,pickNext } from '../server/scheduler.js';
-import { createWallServer } from '../server/app.js';
-import { mpd } from '../server/providers.js';
-async function fixture(t){const dir=await mkdtemp(path.join(os.tmpdir(),'wall-test-'));t.after(()=>rm(dir,{recursive:true,force:true}));return dir;}
-test('JSON updates are serialized and survive restart; invalid updates preserve disk',async t=>{const dir=await fixture(t),store=await new JsonStore(dir).init();const a={...store.config,name:'A'},b={...store.config,name:'B'};await Promise.all([store.update(a),store.update(b)]);assert.equal((await new JsonStore(dir).init()).config.name,'B');assert.throws(()=>store.update({...b,intervalSeconds:0}));assert.equal(JSON.parse(await readFile(path.join(dir,'settings.json'),'utf8')).name,'B');await store.saveSecrets({password:'private'});assert.equal((await new JsonStore(dir).init()).secrets.password,'private');});
-test('corrupt settings are reported and never overwritten',async t=>{const dir=await fixture(t);const {writeFile}=await import('node:fs/promises');await writeFile(path.join(dir,'settings.json'),'{broken');await assert.rejects(new JsonStore(dir).init(),/ungültig/);assert.equal(await readFile(path.join(dir,'settings.json'),'utf8'),'{broken');});
-test('scheduler respects seasons, hours, disabled and future sources',()=>{const c=defaults();c.scenes.forEach(s=>s.enabled=false);c.scenes[0]={...c.scenes[0],enabled:true,seasons:['winter'],hours:[8]};assert.equal(eligibleScenes(c,new Date(2026,0,1,8)).length,1);assert.equal(pickNext(c,null,1,new Date(2026,6,1,8)),null);c.scenes[0].type='google-photos';c.scenes[0].sources=[];assert.equal(eligibleScenes(c,new Date(2026,0,1,8)).length,0);});
-test('weighted shuffle avoids immediate repeat and deterministic selection wraps',()=>{const c=defaults();assert.notEqual(pickNext(c,'alpine',1,new Date(),()=>0),'alpine');c.shuffle=false;assert.equal(pickNext(c,'welcome'), 'alpine');assert.equal(pickNext(c,'alpine',-1),'welcome');});
-test('config rejects duplicate IDs, orphan overlays and dangerous URLs',()=>{const c=defaults();c.monitors[1].id='m1';assert.equal(configSchema.safeParse(c).success,false);const d=defaults();d.scenes[0].sources=['file:///etc/passwd'];assert.equal(configSchema.safeParse(d).success,false);const e=defaults();e.widgets[0].monitor='nope';assert.equal(configSchema.safeParse(e).success,false);});
-test('authenticated API controls, optimistic concurrency, uploads, secrets and events',async t=>{const directory=await fixture(t);const initial=await new JsonStore(directory).init();initial.config.widgets.forEach(w=>w.enabled=false);await initial.update(initial.config);const service=await createWallServer({directory,host:'127.0.0.1',port:0,dist:path.resolve('dist')});t.after(()=>service.close());const base=`http://127.0.0.1:${service.server.address().port}`;const req=(route,method='GET',body)=>fetch(base+route,{method,headers:{Authorization:`Bearer ${service.token}`,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined});assert.equal((await fetch(base+'/api/state')).status,401);const state=await(await req('/api/state')).json();assert.equal(JSON.stringify(state).includes(service.token),false);assert.equal((await req('/api/control','POST',{action:'pause'})).status,200);assert.equal(service.snapshot().state.paused,true);const saved=await req('/api/config','PUT',{config:{...state.config,name:'Family'},revision:state.state.revision});assert.equal(saved.status,200);assert.equal((await req('/api/config','PUT',{config:state.config,revision:0})).status,409);assert.equal((await req('/api/control','POST',{action:'select',id:'missing'})).status,400);assert.equal((await req('/api/secrets/mpd','PUT',{password:'test-secret'})).status,200);assert.equal(JSON.stringify(await(await req('/api/state')).json()).includes('test-secret'),false);const form=new FormData();form.append('files',new Blob(['<html>hello</html>'],{type:'text/html'}),'hello.html');const upload=await fetch(base+'/api/upload',{method:'POST',headers:{Authorization:`Bearer ${service.token}`},body:form});assert.equal(upload.status,200);const {sources}=await upload.json();assert.equal((await fetch(base+sources[0])).status,401);const media=await fetch(base+sources[0]+`?token=${service.token}`);assert.equal(await media.text(),'<html>hello</html>');assert.match(media.headers.get('content-security-policy'),/sandbox/);const abort=new AbortController();const stream=await fetch(base+`/api/events?token=${service.token}`,{signal:abort.signal});const reader=stream.body.getReader();const chunk=await reader.read();assert.match(new TextDecoder().decode(chunk.value),/Family/);abort.abort();await reader.cancel().catch(()=>{});});
-test('MPD parser handles fragmented greeting and song values containing colons',async t=>{const server=net.createServer(socket=>{socket.write('OK MP');setTimeout(()=>socket.write('D 0.24.0\n'),5);socket.on('data',data=>{if(data.toString().includes('currentsong')){socket.write('state: play\nArtist: Test Artist\nTitle: A: ');setTimeout(()=>socket.end('song\nAlbum: Album\nOK\n'),5);}});});await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(()=>new Promise(resolve=>server.close(resolve)));const result=await mpd({host:'127.0.0.1',port:server.address().port});assert.deepEqual(result.lines,['A: song','Test Artist · Album','Wiedergabe']);});
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
+	mkdtemp, readFile, rm
+} from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import net from "node:net";
+import { defaults } from "../server/defaults.js";
+import { JsonStore } from "../server/store.js";
+import { configSchema } from "../server/schema.js";
+import { eligibleScenes, pickNext } from "../server/scheduler.js";
+import { createWallServer } from "../server/app.js";
+import { mpd } from "../server/providers.js";
 
-test('simultaneous configuration saves cannot overwrite each other',async t=>{const directory=await fixture(t),initial=await new JsonStore(directory).init();initial.config.widgets.forEach(w=>w.enabled=false);await initial.update(initial.config);const service=await createWallServer({directory,host:'127.0.0.1',port:0,dist:path.resolve('dist')});t.after(()=>service.close());const base=`http://127.0.0.1:${service.server.address().port}`;const update=name=>fetch(base+'/api/config',{method:'PUT',headers:{Authorization:`Bearer ${service.token}`,'Content-Type':'application/json'},body:JSON.stringify({config:{...initial.config,name},revision:0})});const responses=await Promise.all([update('First'),update('Second')]);assert.deepEqual(responses.map(r=>r.status).sort(),[200,409]);assert.equal(service.snapshot().state.revision,1);});
+async function fixture( t ) {
+	const dir = await mkdtemp( path.join( os.tmpdir(), "wall-test-" ) );t.after( () => rm( dir, { recursive: true, force: true } ) );return dir;
+}
+
+test( "JSON updates are serialized and survive restart; invalid updates preserve disk", async t => {
+	const dir = await fixture( t ), store = await new JsonStore( dir ).init();const a = { ...store.config, name: "A" }, b = { ...store.config, name: "B" };await Promise.all( [ store.update( a ), store.update( b ) ] );assert.equal( ( await new JsonStore( dir ).init() ).config.name, "B" );assert.throws( () => store.update( { ...b, intervalSeconds: 0 } ) );assert.equal( JSON.parse( await readFile( path.join( dir, "settings.json" ), "utf8" ) ).name, "B" );await store.saveSecrets( { password: "private" } );assert.equal( ( await new JsonStore( dir ).init() ).secrets.password, "private" );
+} );
+test( "corrupt settings are reported and never overwritten", async t => {
+	const dir = await fixture( t );const { writeFile } = await import( "node:fs/promises" );await writeFile( path.join( dir, "settings.json" ), "{broken" );await assert.rejects( new JsonStore( dir ).init(), /ungültig/ );assert.equal( await readFile( path.join( dir, "settings.json" ), "utf8" ), "{broken" );
+} );
+test( "scheduler respects seasons, hours, disabled and future sources", () => {
+	const c = defaults();c.scenes.forEach( s => s.enabled = false );c.scenes[ 0 ] = {
+		...c.scenes[ 0 ], enabled: true, seasons: [ "winter" ], hours: [ 8 ]
+	};assert.equal( eligibleScenes( c, new Date(
+		2026, 0, 1, 8
+	) ).length, 1 );assert.equal( pickNext(
+		c, null, 1, new Date(
+			2026, 6, 1, 8
+		)
+	), null );c.scenes[ 0 ].type = "google-photos";c.scenes[ 0 ].sources = [];assert.equal( eligibleScenes( c, new Date(
+		2026, 0, 1, 8
+	) ).length, 0 );
+} );
+test( "weighted shuffle avoids immediate repeat and deterministic selection wraps", () => {
+	const c = defaults();assert.notEqual( pickNext(
+		c, "alpine", 1, new Date(), () => 0
+	), "alpine" );c.shuffle = false;assert.equal( pickNext( c, "welcome" ), "alpine" );assert.equal( pickNext(
+		c, "alpine", -1
+	), "welcome" );
+} );
+test( "config rejects duplicate IDs, orphan overlays and dangerous URLs", () => {
+	const c = defaults();c.monitors[ 1 ].id = "m1";assert.equal( configSchema.safeParse( c ).success, false );const d = defaults();d.scenes[ 0 ].sources = [ "file:///etc/passwd" ];assert.equal( configSchema.safeParse( d ).success, false );const e = defaults();e.widgets[ 0 ].monitor = "nope";assert.equal( configSchema.safeParse( e ).success, false );
+} );
+test( "authenticated API controls, optimistic concurrency, uploads, secrets and events", async t => {
+	const directory = await fixture( t );const initial = await new JsonStore( directory ).init();initial.config.widgets.forEach( w => w.enabled = false );await initial.update( initial.config );const service = await createWallServer( {
+		directory, host: "127.0.0.1", port: 0, dist: path.resolve( "dist" )
+	} );t.after( () => service.close() );const base = `http://127.0.0.1:${service.server.address().port}`;const req = (
+		route, method = "GET", body
+	) => fetch( base + route, {
+		method, headers: { Authorization: `Bearer ${service.token}`, ...body ? { "Content-Type": "application/json" } : {} }, body: body ? JSON.stringify( body ) : undefined
+	} );assert.equal( ( await fetch( base + "/api/state" ) ).status, 401 );const state = await( await req( "/api/state" ) ).json();assert.equal( JSON.stringify( state ).includes( service.token ), false );assert.equal( ( await req(
+		"/api/control", "POST", { action: "pause" }
+	) ).status, 200 );assert.equal( service.snapshot().state.paused, true );const saved = await req(
+		"/api/config", "PUT", { config: { ...state.config, name: "Family" }, revision: state.state.revision }
+	);assert.equal( saved.status, 200 );assert.equal( ( await req(
+		"/api/config", "PUT", { config: state.config, revision: 0 }
+	) ).status, 409 );assert.equal( ( await req(
+		"/api/control", "POST", { action: "select", id: "missing" }
+	) ).status, 400 );assert.equal( ( await req(
+		"/api/secrets/mpd", "PUT", { password: "test-secret" }
+	) ).status, 200 );assert.equal( JSON.stringify( await( await req( "/api/state" ) ).json() ).includes( "test-secret" ), false );const form = new FormData();form.append(
+		"files", new Blob( [ "<html>hello</html>" ], { type: "text/html" } ), "hello.html"
+	);const upload = await fetch( base + "/api/upload", {
+		method: "POST", headers: { Authorization: `Bearer ${service.token}` }, body: form
+	} );assert.equal( upload.status, 200 );const { sources } = await upload.json();assert.equal( ( await fetch( base + sources[ 0 ] ) ).status, 401 );const media = await fetch( base + sources[ 0 ] + `?token=${service.token}` );assert.equal( await media.text(), "<html>hello</html>" );assert.match( media.headers.get( "content-security-policy" ), /sandbox/ );const abort = new AbortController();const stream = await fetch( base + `/api/events?token=${service.token}`, { signal: abort.signal } );const reader = stream.body.getReader();const chunk = await reader.read();assert.match( new TextDecoder().decode( chunk.value ), /Family/ );abort.abort();await reader.cancel().catch( () => {} );
+} );
+test( "MPD parser handles fragmented greeting and song values containing colons", async t => {
+	const server = net.createServer( socket => {
+		socket.write( "OK MP" );setTimeout( () => socket.write( "D 0.24.0\n" ), 5 );socket.on( "data", data => {
+			if ( data.toString().includes( "currentsong" ) ) {
+				socket.write( "state: play\nArtist: Test Artist\nTitle: A: " );setTimeout( () => socket.end( "song\nAlbum: Album\nOK\n" ), 5 );
+			}
+		} );
+	} );await new Promise( resolve => server.listen(
+		0, "127.0.0.1", resolve
+	) );t.after( () => new Promise( resolve => server.close( resolve ) ) );const result = await mpd( { host: "127.0.0.1", port: server.address().port } );assert.deepEqual( result.lines, [ "A: song", "Test Artist · Album", "Wiedergabe" ] );
+} );
+
+test( "simultaneous configuration saves cannot overwrite each other", async t => {
+	const directory = await fixture( t ), initial = await new JsonStore( directory ).init();initial.config.widgets.forEach( w => w.enabled = false );await initial.update( initial.config );const service = await createWallServer( {
+		directory, host: "127.0.0.1", port: 0, dist: path.resolve( "dist" )
+	} );t.after( () => service.close() );const base = `http://127.0.0.1:${service.server.address().port}`;const update = name => fetch( base + "/api/config", {
+		method: "PUT", headers: { Authorization: `Bearer ${service.token}`, "Content-Type": "application/json" }, body: JSON.stringify( { config: { ...initial.config, name }, revision: 0 } )
+	} );const responses = await Promise.all( [ update( "First" ), update( "Second" ) ] );assert.deepEqual( responses.map( r => r.status ).sort(), [ 200, 409 ] );assert.equal( service.snapshot().state.revision, 1 );
+} );

@@ -1,14 +1,110 @@
-import { z } from 'zod';
-import { apiTypes, apiTypeForScene } from '../shared/api-types.js';
-const id = z.string().regex(/^[a-zA-Z0-9_-]+$/).max(100);
-const url = z.string().max(2000).refine(v => /^https?:\/\//.test(v) || /^\/(media|demo)\/[\w/%. -]+$/.test(v), 'HTTP(S)-URL oder lokale Mediendatei erforderlich');
-export const sceneSchema = z.object({ id, apiId: id.optional(), title: z.string().min(1).max(200), type: z.enum(['stack','panorama','fit','html','google-photos','google-picker']), category: z.string().max(100), googlePhotos: z.object({mediaSourceId:z.string().max(500).optional()}).optional(), sources: z.array(url).max(2000), enabled: z.boolean(), weight: z.number().int().min(1).max(5), seasons: z.array(z.enum(['spring','summer','autumn','winter'])), hours: z.array(z.number().int().min(0).max(23)), scrollSeconds: z.number().min(10).max(3600) });
-export const widgetSchema = z.object({ id, apiId: id.optional(), title: z.string().min(1).max(100), type: z.enum(['clock','title','weather','transit','school','mpd','calendar','cameras','soccer']), enabled: z.boolean(), monitor: id, position: z.enum(['top-left','top-center','top-right','bottom-left','bottom-center','bottom-right']), refreshSeconds: z.number().min(5).max(86400), options: z.record(z.string(), z.unknown()).default({}) });
-export const apiSchema = z.object({ id, title: z.string().min(1).max(100), type: z.enum(apiTypes.map(t=>t.value)), options: z.record(z.string(), z.unknown()).default({}) });
-export const monitorSchema = z.object({ id, name: z.string().min(1).max(100), displayId: z.string().nullable(), x: z.number().int().min(-20000).max(20000), y: z.number().int().min(-20000).max(20000), width: z.number().int().min(200).max(16000), height: z.number().int().min(200).max(16000), enabled: z.boolean() });
-export const configSchema = z.object({ version: z.literal(1), apis: z.array(apiSchema).max(100).default([]), name: z.string().min(1).max(100), intervalSeconds: z.number().min(10).max(86400), fadeSeconds: z.number().min(0).max(10), brightness: z.number().min(10).max(100), shuffle: z.boolean(), monitors: z.array(monitorSchema).min(1).max(16), scenes: z.array(sceneSchema).max(2000), widgets: z.array(widgetSchema).max(100) }).superRefine((v,ctx) => {
- for (const key of ['monitors','scenes','widgets','apis']) if(new Set(v[key].map(x=>x.id)).size!==v[key].length) ctx.addIssue({code:'custom',message:`Doppelte IDs: ${key}`});
- const assigned=v.monitors.filter(m=>m.enabled&&m.displayId).map(m=>m.displayId);if(new Set(assigned).size!==assigned.length)ctx.addIssue({code:'custom',message:'Ein Bildschirm ist mehrfach zugeordnet'});
- for (const w of v.widgets) if(!v.monitors.some(m=>m.id===w.monitor)) ctx.addIssue({code:'custom',message:`Unbekannter Monitor: ${w.monitor}`});
- for (const element of [...v.scenes,...v.widgets]) if(element.apiId&&!v.apis.some(a=>a.id===element.apiId&&a.type===(apiTypeForScene(element.type)||element.type))) ctx.addIssue({code:'custom',message:`Unbekannte oder unpassende API: ${element.apiId}`});
-});
+import { z } from "zod";
+import { apiTypes, apiTypeForScene } from "../shared/api-types.js";
+const id = z.string().regex( /^[a-zA-Z0-9_-]+$/ )
+	.max( 100 );
+const url = z.string().max( 2000 )
+	.refine( v => /^https?:\/\//.test( v ) || /^\/(media|demo)\/[\w/%. -]+$/.test( v ), "HTTP(S)-URL oder lokale Mediendatei erforderlich" );
+export const sceneSchema = z.object( {
+	id,
+	apiId: id.optional(),
+	title: z.string().min( 1 )
+		.max( 200 ),
+	type:         z.enum( [ "stack", "panorama", "fit", "html", "google-photos", "google-picker" ] ),
+	category:     z.string().max( 100 ),
+	googlePhotos: z.object( {
+		mediaSourceId: z.string().max( 500 )
+			.optional()
+	} ).optional(),
+	sources: z.array( url ).max( 2000 ),
+	enabled: z.boolean(),
+	weight:  z.number().int()
+		.min( 1 )
+		.max( 5 ),
+	seasons: z.array( z.enum( [ "spring", "summer", "autumn", "winter" ] ) ),
+	hours:   z.array( z.number().int()
+		.min( 0 )
+		.max( 23 ) ),
+	scrollSeconds: z.number().min( 10 )
+		.max( 3600 )
+} );
+export const widgetSchema = z.object( {
+	id,
+	apiId: id.optional(),
+	title: z.string().min( 1 )
+		.max( 100 ),
+	type:           z.enum( [ "clock", "title", "weather", "transit", "school", "mpd", "calendar", "cameras", "soccer" ] ),
+	enabled:        z.boolean(),
+	monitor:        id,
+	position:       z.enum( [ "top-left", "top-center", "top-right", "bottom-left", "bottom-center", "bottom-right" ] ),
+	refreshSeconds: z.number().min( 5 )
+		.max( 86400 ),
+	options: z.record( z.string(), z.unknown() ).default( {} )
+} );
+export const apiSchema = z.object( {
+	id,
+	title: z.string().min( 1 )
+		.max( 100 ),
+	type:    z.enum( apiTypes.map( t => t.value ) ),
+	options: z.record( z.string(), z.unknown() ).default( {} )
+} );
+export const monitorSchema = z.object( {
+	id,
+	name: z.string().min( 1 )
+		.max( 100 ),
+	displayId: z.string().nullable(),
+	x:         z.number().int()
+		.min( -20000 )
+		.max( 20000 ),
+	y: z.number().int()
+		.min( -20000 )
+		.max( 20000 ),
+	width: z.number().int()
+		.min( 200 )
+		.max( 16000 ),
+	height: z.number().int()
+		.min( 200 )
+		.max( 16000 ),
+	enabled: z.boolean()
+} );
+export const configSchema = z.object( {
+	version: z.literal( 1 ),
+	apis:    z.array( apiSchema ).max( 100 )
+		.default( [] ),
+	name: z.string().min( 1 )
+		.max( 100 ),
+	intervalSeconds: z.number().min( 10 )
+		.max( 86400 ),
+	fadeSeconds: z.number().min( 0 )
+		.max( 10 ),
+	brightness: z.number().min( 10 )
+		.max( 100 ),
+	shuffle:  z.boolean(),
+	monitors: z.array( monitorSchema ).min( 1 )
+		.max( 16 ),
+	scenes:  z.array( sceneSchema ).max( 2000 ),
+	widgets: z.array( widgetSchema ).max( 100 )
+} ).superRefine( ( v, ctx ) => {
+	for ( const key of [ "monitors", "scenes", "widgets", "apis" ] ) {
+		if ( new Set( v[ key ].map( x => x.id ) ).size !== v[ key ].length ) {
+			ctx.addIssue( { code: "custom", message: `Doppelte IDs: ${key}` } );
+		}
+	}
+
+	const assigned = v.monitors.filter( m => m.enabled && m.displayId ).map( m => m.displayId );
+
+	if ( new Set( assigned ).size !== assigned.length ) {
+		ctx.addIssue( { code: "custom", message: "Ein Bildschirm ist mehrfach zugeordnet" } );
+	}
+
+	for ( const w of v.widgets ) {
+		if ( !v.monitors.some( m => m.id === w.monitor ) ) {
+			ctx.addIssue( { code: "custom", message: `Unbekannter Monitor: ${w.monitor}` } );
+		}
+	}
+
+	for ( const element of [ ...v.scenes, ...v.widgets ] ) {
+		if ( element.apiId && !v.apis.some( a => a.id === element.apiId && a.type === ( apiTypeForScene( element.type ) || element.type ) ) ) {
+			ctx.addIssue( { code: "custom", message: `Unbekannte oder unpassende API: ${element.apiId}` } );
+		}
+	}
+} );
