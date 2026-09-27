@@ -10,6 +10,7 @@ import GooglePhotosGallery from "./GooglePhotosGallery.vue";
 import GooglePhotosPicker from "./GooglePhotosPicker.vue";
 import ApiSettings from "./ApiSettings.vue";
 import { apiTypeForScene } from "../../shared/api-types";
+import { seasons } from "../../shared/seasons.js";
 defineProps( { navigating: Boolean } );
 const emit = defineEmits( [ "navigate" ] );
 const tab = ref( "overview" ), drawer = ref( false ), busy = ref( false ), notice = ref( "" ), query = ref( "" ), filter = ref( "all" ), sceneDialog = ref( false ), editing = ref( null ), widgetDialog = ref( false ), widget = ref( null ), dialogError = ref( "" ), settings = ref( null ), monitorDraft = ref( [] ), uploadInput = ref(), uploadTarget = ref( null );
@@ -41,7 +42,6 @@ const types = [ {
 	value: "google-picker", title: "Google Photos · Picker-Import", icon: "mdi-image-plus-outline"
 } ];
 const positions = [ { title: "Oben links", value: "top-left" }, { title: "Oben mittig", value: "top-center" }, { title: "Oben rechts", value: "top-right" }, { title: "Unten links", value: "bottom-left" }, { title: "Unten mittig", value: "bottom-center" }, { title: "Unten rechts", value: "bottom-right" } ];
-const seasons = [ { title: "Frühling", value: "spring" }, { title: "Sommer", value: "summer" }, { title: "Herbst", value: "autumn" }, { title: "Winter", value: "winter" } ];
 const dayPeriods = [
 	{
 		title: "früh · 0–10 Uhr", value: "early", start: 0, end: 10

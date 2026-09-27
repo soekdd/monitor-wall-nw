@@ -1,5 +1,7 @@
+import { seasonForDate } from "../shared/seasons.js";
+
 export function eligibleScenes( config, date = new Date() ) {
-	const month = date.getMonth();const season = [ "winter", "winter", "spring", "spring", "spring", "summer", "summer", "summer", "autumn", "autumn", "autumn", "winter" ][ month ];return config.scenes.filter( s => s.enabled && s.sources.length && ( !s.seasons.length || s.seasons.includes( season ) ) && ( !s.hours.length || s.hours.includes( date.getHours() ) ) );
+	const season = seasonForDate( date );return config.scenes.filter( s => s.enabled && s.sources.length && ( !s.seasons.length || s.seasons.includes( season ) ) && ( !s.hours.length || s.hours.includes( date.getHours() ) ) );
 }
 
 export function pickNext(

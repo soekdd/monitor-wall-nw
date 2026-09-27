@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { apiTypes, apiTypeForScene } from "../shared/api-types.js";
+import { seasons } from "../shared/seasons.js";
 const id = z.string().regex( /^[a-zA-Z0-9_-]+$/ )
 	.max( 100 );
 const url = z.string().max( 2000 )
@@ -20,7 +21,7 @@ export const sceneSchema = z.object( {
 	weight:  z.number().int()
 		.min( 1 )
 		.max( 5 ),
-	seasons: z.array( z.enum( [ "spring", "summer", "autumn", "winter" ] ) ),
+	seasons: z.array( z.enum( seasons.map( season => season.value ) ) ),
 	hours:   z.array( z.number().int()
 		.min( 0 )
 		.max( 23 ) ),

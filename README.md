@@ -51,6 +51,17 @@ Neue Bild-Uploads und URL-Downloads werden vor der endgültigen Speicherung in W
 
 Upload von JPEG, PNG, WebP, GIF, AVIF und HTML, maximal 50 MB pro Datei und 30 Dateien pro Upload. Alternativ URLs eingeben. Die drei mitgelieferten SVG-Landschaften sind lokale Demoillustrationen, keine eigenen Fotos. Kategorien, Prioritäten (1–5), Jahreszeiten und Tagesstunden lassen sich pro Szene ändern. Bei zufälliger Wiedergabe gewichtet die Priorität die Auswahl; die aktuelle Szene wird bei mehreren verfügbaren Szenen nicht direkt wiederholt. Ohne passende Szene erscheint ein Hinweis. Pause hält auch den Scroll- und Stapelfortschritt an.
 
+Jahreszeiten richten sich nach dem lokalen Kalenderdatum des Servers. Frühling gilt März–Mai, Sommer Juni–August, Herbst September–November und Winter Dezember–Februar. Vier Sonderzeiträume ersetzen während ihrer Laufzeit die normale Jahreszeit:
+
+| Jahreszeit | Zeitraum (Start und Ende einschließlich) |
+| --- | --- |
+| Advent | Samstag vor dem ersten Adventssonntag bis 30. Dezember |
+| Silvester | Nur 31. Dezember |
+| Ostern | 14 Tage vor Ostersonntag bis 7 Tage danach |
+| Halloween | 24. bis 31. Oktober |
+
+Beispiel: Während Halloween werden Szenen mit ausschließlich „Herbst“ nicht automatisch ausgewählt; Szenen mit „Halloween“ oder „Herbst + Halloween“ sind verfügbar. Ohne Jahreszeitenauswahl gilt eine Szene weiterhin ganzjährig. Ostersonntag wird lokal mit dem gregorianischen [Meeus/Jones/Butcher-Verfahren](https://degenerateconic.com/computus.html) berechnet; dafür ist keine Internetverbindung nötig.
+
 ## Informationsmodule
 
 Über **Modul hinzufügen** lassen sich zusätzliche Module anlegen, beispielsweise ein eigener Vertretungsplan pro Kind oder mehrere Kalender. Monitor, eine von sechs Positionen und Aktualisierungsintervall sind je Modul einstellbar. Module an derselben Position werden untereinander angeordnet. Die externen Daten lädt ausschließlich das Backend. Fehler erscheinen sowohl in der Verwaltung als auch auf der Wand; bereits geladene Daten bleiben bei einem Ausfall sichtbar.
