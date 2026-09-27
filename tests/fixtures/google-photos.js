@@ -1,6 +1,12 @@
+import sharp from "sharp";
 import assert from "node:assert/strict";
 const json = ( value, status = 200 ) => Response.json( value, { status } );
-export const png = Buffer.from( "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a2XcAAAAASUVORK5CYII=", "base64" );
+export const png = await sharp( {
+	create: {
+		width: 2400, height: 1200, channels: 3, background: "white"
+	}
+} ).png()
+	.toBuffer();
 
 export function fakeGoogle() {
 	const calls = [], mock = {

@@ -4,12 +4,16 @@ import path from "node:path";
 import {
 	randomBytes, timingSafeEqual, randomUUID
 } from "node:crypto";
-import { Readable } from "node:stream";
+import {
+	rename, rm, writeFile
+} from "node:fs/promises";
+import { webpImage } from "./image-processing.js";
 import { networkInterfaces } from "node:os";
 import { JsonStore } from "./store.js";
 import { pickNext, eligibleScenes } from "./scheduler.js";
 import { loadWidget } from "./providers.js";
 import { ApiConnections } from "./api-connections.js";
+import { downloadImage } from "./image-import.js";
 
 export async function createWallServer( {
 	directory, port = 3210, host = "0.0.0.0", frontend, dist, displays = () => [], onDisplays = () => {}, photosOptions = {}, googleCredentialsDirectory, googleCredentialsFile, googlePickerCredentialsFile
@@ -191,8 +195,7 @@ export async function createWallServer( {
 
 		const controller = new AbortController();res.on( "close", () => controller.abort() );const response = await connections.forScene( scene ).image(
 			scene.id, req.params.key, AbortSignal.any( [ controller.signal, AbortSignal.timeout( 20000 ) ] )
-		);res.setHeader( "Content-Type", response.headers.get( "content-type" ) );Readable.fromWeb( response.body ).on( "error", () => res.destroy() )
-			.pipe( res );
+		);res.setHeader( "Content-Type", "image/webp" );res.send( Buffer.from( await response.arrayBuffer() ) );
 	} );
 	app.get( "/api/state", ( _req, res ) => res.json( snapshot() ) );
 	app.get( "/api/events", ( req, res ) => {
@@ -268,7 +271,7 @@ export async function createWallServer( {
 			destination: path.join( directory, "media" ),
 			filename:    (
 				_req, file, cb
-			) => cb( null, `${randomUUID()}${path.extname( file.originalname ).toLowerCase()}` )
+			) => cb( null, `.upload-${randomUUID()}${path.extname( file.originalname ).toLowerCase()}` )
 		} ),
 		limits:     { fileSize: 50 * 1024 * 1024, files: 30 },
 		fileFilter: (
@@ -276,14 +279,47 @@ export async function createWallServer( {
 		) => cb( null, /\.(jpe?g|png|webp|gif|avif|html?)$/i.test( file.originalname ) )
 	} );
 	app.post(
-		"/api/upload", upload.array( "files", 30 ), ( req, res ) => {
+		"/api/upload", upload.array( "files", 30 ), async( req, res ) => {
 			if ( !req.files?.length ) {
 				return res.status( 400 ).json( { error: "Keine unterstützten Dateien ausgewählt" } );
 			}
 
-			res.json( { sources: req.files.map( f => `/media/${f.filename}` ) } );
+			const completed = [];
+
+			try {
+				for ( const file of req.files ) {
+					const html = /\.html?$/i.test( file.originalname );
+					const name = `${randomUUID()}${html ? path.extname( file.originalname ).toLowerCase() : ".webp"}`;
+					const target = path.join(
+						directory, "media", name
+					);
+					completed.push( target );
+
+					if ( html ) {
+						await rename( file.path, target );
+					} else {
+						await writeFile(
+							target, await webpImage( file.path, req.body.type || "fit" ), { flag: "wx" }
+						);
+					}
+				}
+
+				res.json( { sources: completed.map( f => `/media/${path.basename( f )}` ) } );
+			} catch( error ) {
+				await Promise.all( completed.map( f => rm( f, { force: true } ) ) );
+				throw Object.assign( new Error( "Die Bilddateien konnten nicht verarbeitet werden. Bitte gültige Bilder auswählen." ), { status: 415 } );
+			} finally {
+				await Promise.all( req.files.map( f => rm( f.path, { force: true } ) ) );
+			}
 		}
 	);
+	app.post( "/api/import-image", async( req, res ) => {
+		const source = await downloadImage(
+			req.body?.url, path.join( directory, "media" ), { type: req.body?.type || "fit" }
+		);
+		res.json( { sources: [ source ] } );
+	} );
+
 	app.use(
 		"/media", (
 			req, res, next

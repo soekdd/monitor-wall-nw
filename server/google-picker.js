@@ -1,3 +1,5 @@
+import { webpImage } from "./image-processing.js";
+import { writeFile } from "node:fs/promises";
 import {
 	randomUUID, randomBytes, createHash
 } from "node:crypto";
@@ -371,7 +373,7 @@ export class GooglePicker extends GooglePhotos {
 					throw fail( "Google hat eine ungültige Bildadresse geliefert.", 502 );
 				}
 
-				const name = `google-picker-${randomUUID()}${extensions[ item.mediaFile.mimeType ]}`;
+				const name = `google-picker-${randomUUID()}.webp`;
 				const response = await this.fetch( `${u.href}=d`, {
 					headers: { Authorization: `Bearer ${await this.accessToken()}` }, signal: AbortSignal.any( [ this.shutdown.signal, AbortSignal.timeout( 120000 ) ] ), redirect: "error"
 				} );
@@ -395,13 +397,19 @@ export class GooglePicker extends GooglePhotos {
 					}
 				} );
 				await pipeline(
-					Readable.fromWeb( response.body ), limit, createWriteStream( path.join( staging, name ), { flags: "wx", mode: 0o600 } ), { signal: this.shutdown.signal }
+					Readable.fromWeb( response.body ), limit, createWriteStream( path.join( staging, `${name}.download` ), { flags: "wx", mode: 0o600 } ), { signal: this.shutdown.signal }
 				);
 
 				if ( !bytes ) {
 					throw fail( "Google hat eine leere Bilddatei geliefert.", 502 );
 				}
 
+				const converted = await webpImage( path.join( staging, `${name}.download` ), "google-picker" );
+				this.shutdown.signal.throwIfAborted();
+				await writeFile(
+					path.join( staging, name ), converted, { flag: "wx", mode: 0o600 }
+				);
+				await rm( path.join( staging, `${name}.download` ), { force: true } );
 				files.push( name );job.completed++;this.onImport();
 			}
 

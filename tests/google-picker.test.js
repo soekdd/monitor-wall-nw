@@ -1,3 +1,4 @@
+import sharp from "sharp";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -11,7 +12,6 @@ import { ApiConnections, apiStore } from "../server/api-connections.js";
 import { defaults } from "../server/defaults.js";
 import { configSchema } from "../server/schema.js";
 import { createWallServer } from "../server/app.js";
-import { png } from "./fixtures/google-photos.js";
 import { fakePicker } from "./fixtures/google-picker.js";
 
 
@@ -80,7 +80,7 @@ test( "Picker imports multiple pages locally, skips video, keeps scope separate 
 	assert.equal( picker.jobs.get( scene.id ).status, "done" );assert.equal( store.config.scenes.at( -1 ).sources.length, 2 );assert.equal( picker.session( scene.id ), undefined );
 
 	for ( const source of store.config.scenes.at( -1 ).sources ) {
-		assert.deepEqual( await readFile( path.join( directory, source ) ), png );
+		assert.match( source, /\.webp$/ );const metadata = await sharp( await readFile( path.join( directory, source ) ) ).metadata();assert.equal( metadata.format, "webp" );assert.equal( metadata.width, 1600 );assert.equal( metadata.height, 800 );
 	}
 
 	google.now += 2 * 3600000;const restarted = await new JsonStore( directory ).init();assert.deepEqual( restarted.config.scenes.at( -1 ).sources, store.config.scenes.at( -1 ).sources );assert.equal( JSON.stringify( picker.status() ).includes( "private-" ), false );
@@ -164,7 +164,7 @@ test( "authenticated Picker API imports and renders durable files without exposi
 	assert.equal( ( await req( "/api/google-picker/scenes/picked/session" ) ).status, 200 );google.selected = true;google.now += 5001;
 	assert.equal( ( await( await req( "/api/google-picker/scenes/picked/poll" ) ).json() ).status, "ready" );assert.equal( ( await req( "/api/google-picker/scenes/picked/import" ) ).status, 200 );
 	const picker = service.connections.forScene( scene );await picker.jobs.get( scene.id ).promise;assert.equal( service.snapshot().state.revision, 1 );const state = await( await req( "/api/state", "GET" ) ).json();assert.equal( JSON.stringify( state ).includes( "private-" ), false );assert.equal( JSON.stringify( state ).includes( "googleusercontent.com/one" ), false );
-	const source = state.config.scenes.at( -1 ).sources[ 0 ];assert.equal( ( await fetch( base + source ) ).status, 401 );assert.deepEqual( Buffer.from( await( await req( source, "GET" ) ).arrayBuffer() ), png );assert.equal( ( await req(
+	const source = state.config.scenes.at( -1 ).sources[ 0 ];assert.equal( ( await fetch( base + source ) ).status, 401 );assert.equal( ( await sharp( Buffer.from( await( await req( source, "GET" ) ).arrayBuffer() ) ).metadata() ).format, "webp" );assert.equal( ( await req(
 		"/api/control", "POST", { action: "select", id: scene.id }
 	) ).status, 200 );
 	const w = state.config.widgets.find( w => w.type === "weather" );const shared = structuredClone( state.config );shared.widgets.push( {

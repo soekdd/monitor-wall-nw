@@ -1,10 +1,12 @@
 <script setup>
 import {
-	computed, onMounted, onUnmounted, ref
+	computed, onMounted, onUnmounted, ref, watch
 } from "vue";
 import {
 	wall, mediaUrl, getToken, sceneSources
 } from "../api";
+import { stackLayout, stackPictures } from "../../shared/stack-layout.js";
+const imageDimensions = ref( new Map() );
 const props = defineProps( { monitor: String, preview: Boolean } );
 const root = ref(), size = ref( { width: 1200, height: 400 } ), now = ref( Date.now() );let observer, timer;
 onMounted( () => {
@@ -36,7 +38,8 @@ const worldStyle = computed( () => ( {
 const scene = computed( () => wall.config?.scenes.find( s => s.id === wall.state.currentId ) );
 const sources = computed( () => sceneSources( scene.value ) );
 const elapsed = computed( () => Math.max( 0, ( ( wall.state.pausedAt || now.value ) - wall.state.changedAt ) / 1000 ) );
-const imageIndex = computed( () => sources.value.length ? Math.floor( elapsed.value / 12 ) % sources.value.length : 0 );
+const imageStep = computed( () => Math.floor( elapsed.value / 12 ) );
+const imageIndex = computed( () => sources.value.length ? imageStep.value % sources.value.length : 0 );
 
 function monitorStyle( m ) {
 	return {
@@ -64,11 +67,52 @@ function lines( w ) {
 	return wall.widgets[ w.id ]?.lines || [];
 }
 
-function stackStyle( i, m ) {
-	const n = i + monitors.value.indexOf( m ) * 5;return {
-		left: `${18 + n * 31 % 64}%`, top: `${19 + n * 23 % 58}%`, transform: `translate(-50%,-50%) rotate(${n * 13 % 29 - 14}deg)`, zIndex: i
+const stacks = computed( () => monitors.value.map( ( monitor, monitorIndex ) => {
+	const pictures = stackPictures(
+		sources.value, imageStep.value, monitorIndex
+	);
+	const cards = stackLayout(
+		monitor, monitorIndex, pictures.map( source => imageDimensions.value.get( source ) ), imageStep.value
+	);
+	return {
+		monitor,
+		cards: cards.map( ( card, index ) => ( {
+			...card, source: pictures[ index ], loaded: imageDimensions.value.has( pictures[ index ] )
+		} ) )
+	};
+} ) );
+
+watch( () => sources.value.join( "\n" ), () => {
+	const active = new Set( sources.value );
+
+	for ( const source of imageDimensions.value.keys() ) {
+		if ( !active.has( source ) ) {
+			imageDimensions.value.delete( source );
+		}
+	}
+} );
+
+function rememberImage( source, event ) {
+	const image = event.target;
+
+	if ( image.naturalWidth && image.naturalHeight ) {
+		imageDimensions.value.set( source, { width: image.naturalWidth, height: image.naturalHeight } );
+	}
+}
+
+function stackStyle( card ) {
+	return {
+		left:        `${card.x}px`,
+		top:         `${card.y}px`,
+		width:       `${card.width}px`,
+		height:      `${card.height}px`,
+		borderWidth: `${card.border}px`,
+		opacity:     card.loaded ? 1 : 0,
+		transform:   `translate(-50%,-50%) rotate(${card.rotation}deg)`,
+		zIndex:      card.zIndex
 	};
 }
+
 </script>
 <template>
 <div ref="root"
@@ -87,15 +131,16 @@ function stackStyle( i, m ) {
 				title="Hinterlegte HTML-Seite"
 			></iframe>
 			<div v-else-if="scene.type==='fit'" class="fit-scene"><img alt="" :src="mediaUrl(sources[imageIndex])" /></div>
-			<template v-else-if="[ 'stack','google-photos','google-picker' ].includes(scene.type)&&sources.length"><div v-for="m in monitors"
-				:key="m.id"
+			<template v-else-if="[ 'stack','google-photos','google-picker' ].includes(scene.type)&&sources.length"><div v-for="stack in stacks"
+				:key="stack.monitor.id"
 				class="stack-monitor"
-				:style="monitorStyle(m)"
-			><img v-for="i in 7"
-				:key="i"
+				:style="monitorStyle(stack.monitor)"
+			><img v-for="card in stack.cards"
+				:key="card.zIndex"
 				alt=""
-				:src="mediaUrl(sources[(i+imageIndex+monitors.indexOf(m)*7)%sources.length])"
-				:style="stackStyle(i,m)"
+				:src="mediaUrl(card.source)"
+				:style="stackStyle(card)"
+				@load="rememberImage(card.source,$event)"
 			/></div></template>
 		</div></Transition>
 		<div v-if="!scene" class="empty-wall">Keine Szene für diese Tageszeit. Medien hinzufügen oder Filter anpassen.</div>

@@ -11,6 +11,7 @@ import GooglePhotosPicker from "./GooglePhotosPicker.vue";
 import ApiSettings from "./ApiSettings.vue";
 import { apiTypeForScene } from "../../shared/api-types";
 const tab = ref( "overview" ), drawer = ref( false ), busy = ref( false ), notice = ref( "" ), query = ref( "" ), filter = ref( "all" ), sceneDialog = ref( false ), editing = ref( null ), widgetDialog = ref( false ), widget = ref( null ), dialogError = ref( "" ), settings = ref( null ), monitorDraft = ref( [] ), uploadInput = ref(), uploadTarget = ref( null );
+const urlDialog = ref( false ), panoramaUrl = ref( "" ), urlError = ref( "" ), downloading = ref( false );
 const nav = [ {
 	id: "overview", label: "Übersicht", icon: "mdi-view-dashboard-outline"
 }, {
@@ -124,7 +125,7 @@ async function upload( event ) {
 	busy.value = true;
 
 	try {
-		const data = new FormData();files.forEach( f => data.append( "files", f ) );const response = await request(
+		const data = new FormData();data.append( "type", uploadTarget.value === "editing" ? editing.value.type : files.length > 1 ? "stack" : "fit" );files.forEach( f => data.append( "files", f ) );const response = await request(
 			"/upload", "POST", data
 		);
 
@@ -137,6 +138,26 @@ async function upload( event ) {
 		wall.error = e.message;
 	} finally {
 		busy.value = false;
+	}
+}
+
+function enterPanoramaUrl() {
+	panoramaUrl.value = "";urlError.value = "";urlDialog.value = true;
+}
+
+async function downloadPanorama() {
+	const scene = editing.value;
+	downloading.value = true;urlError.value = "";
+
+	try {
+		const response = await request(
+			"/import-image", "POST", { url: panoramaUrl.value.trim(), type: scene.type }
+		);
+		scene.sources.push( ...response.sources );urlDialog.value = false;
+	} catch( e ) {
+		urlError.value = e.message;
+	} finally {
+		downloading.value = false;
 	}
 }
 
@@ -473,7 +494,13 @@ watch( () => wall.config.scenes.find( s => s.id === editing.value?.id )?.sources
 	prepend-icon="mdi-upload"
 	variant="tonal"
 	@click="chooseFiles('editing')"
->Dateien hinzufügen</v-btn><v-select v-model="editing.seasons"
+>Dateien hinzufügen</v-btn><v-btn v-if="[ 'panorama','fit' ].includes(editing.type)"
+	class="ml-3"
+	:disabled="busy"
+	prepend-icon="mdi-link"
+	variant="tonal"
+	@click="enterPanoramaUrl"
+>Hier URL eintragen</v-btn><v-select v-model="editing.seasons"
 	chips
 	class="mt-6"
 	:items="seasons"
@@ -501,6 +528,23 @@ watch( () => wall.config.scenes.find( s => s.id === editing.value?.id )?.sources
 	variant="flat"
 	@click="saveScene"
 >Speichern</v-btn></v-card-actions></v-card></v-dialog>
+<v-dialog v-model="urlDialog" max-width="550" :persistent="downloading"><v-card><v-card-title class="pa-6">Panorama herunterladen</v-card-title><v-card-text><v-text-field v-model="panoramaUrl"
+	autofocus
+	:disabled="downloading"
+	label="Bild-URL"
+	placeholder="https://…/panorama.jpg"
+	type="url"
+	@keydown.enter.prevent="!downloading && downloadPanorama()"
+/><p class="muted">Direkten Link zur Bilddatei eintragen. Das Panorama wird lokal gespeichert.</p><v-alert v-if="urlError"
+	class="mt-4"
+	color="error"
+	variant="tonal"
+>{{urlError}}</v-alert></v-card-text><v-card-actions class="pa-5"><v-spacer/><v-btn :disabled="downloading" @click="urlDialog=false">Abbrechen</v-btn><v-btn color="primary"
+	:disabled="!panoramaUrl.trim()"
+	:loading="downloading"
+	variant="flat"
+	@click="downloadPanorama"
+>Herunterladen</v-btn></v-card-actions></v-card></v-dialog>
 <v-dialog v-model="widgetDialog" max-width="720" scrollable><v-card><v-card-title class="pa-6">Informationsmodul konfigurieren</v-card-title><v-card-text v-if="widget"><v-text-field v-model="widget.title" label="Titel"/><v-select v-model="widget.type" :items="Object.keys(widgetIcons).map(type=>({ value:type,title:{ clock:'Datum & Uhrzeit',title:'Bildtitel',weather:'Wetter',transit:'Bus & Bahn',school:'Vertretungsplan',mpd:'MPD',calendar:'Google Kalender',cameras:'Kameras',soccer:'Fußball' }[type] }))" label="Modultyp"/><div class="coordinate-grid"><v-select v-model="widget.monitor"
 	item-title="name"
 	item-value="id"

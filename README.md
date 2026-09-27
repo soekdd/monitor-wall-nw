@@ -39,7 +39,9 @@ Falls eine npm-Konfiguration Installationsskripte blockiert und die Electron-Lau
 
 ## Medien und Wiedergabe
 
-- **Bilderstapel:** mehrere gerahmte, versetzte Bilder pro Monitor; alle zwölf Sekunden wechseln die Fotos synchron.
+Neue Bild-Uploads und URL-Downloads werden vor der endgültigen Speicherung in WebP konvertiert (Qualität 85). Bilderstapel einschließlich Google Photos werden proportional auf maximal 1600 Pixel an der langen Seite verkleinert; kleinere Bilder werden nicht vergrößert. Panoramen behalten ihre Abmessungen. Google Ambient liefert die konvertierten Bilder zur Anzeige ohne dauerhafte lokale Speicherung. HTML-Uploads bleiben HTML. Bereits vorhandene Medien werden nicht nachträglich konvertiert.
+
+- **Bilderstapel:** ein eigener, horizontal und vertikal zentrierter Stapel pro Monitor. Jedes Bild einschließlich Rahmen belegt höchstens 30 % seiner Monitorfläche und behält sein Seitenverhältnis; alle zwölf Sekunden wechseln die Fotos synchron.
 - **Scrollendes Panorama:** eine gemeinsame, bildschirmübergreifende Fläche mit vertikalem Scrollzyklus. Bilder mit ausreichender Höhe erlauben sichtbares Scrollen; breite Panoramen passen sich der Gesamtleinwand an.
 - **Passendes Bild:** vollständiges Bild in der Gesamtleinwand, ohne Beschnitt, gegebenenfalls mit schwarzen Rändern.
 - **HTML:** hochgeladene eigenständige HTML-Datei oder externe HTTP(S)-Seite in einem isolierten iframe. Externe Seiten können Einbettung selbst verbieten. Kein Zugriff auf Node oder Verwaltungs-API.

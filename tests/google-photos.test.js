@@ -1,3 +1,4 @@
+import sharp from "sharp";
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
@@ -10,7 +11,7 @@ import { GooglePhotos, googleLink } from "../server/google-photos.js";
 import { apiStore } from "../server/api-connections.js";
 import { createWallServer } from "../server/app.js";
 import { eligibleScenes } from "../server/scheduler.js";
-import { fakeGoogle, png } from "./fixtures/google-photos.js";
+import { fakeGoogle } from "./fixtures/google-photos.js";
 
 async function fixture( t ) {
 	const directory = await mkdtemp( path.join( os.tmpdir(), "wall-photos-" ) ); t.after( () => rm( directory, { recursive: true, force: true } ) ); const store = await new JsonStore( directory ).init(); return { directory, store };
@@ -98,7 +99,7 @@ test( "albums supply photo-only stack sources; pagination, refresh and restart r
 	const result = await photos.refresh( { ...scene, googlePhotos: { mediaSourceId: "album1" } } );
 	assert.equal( result.sources.length, 2 ); assert.equal( result.albums[ 0 ].displayName, "Familie" ); assert.equal( JSON.stringify( photos.publicGalleries() ).includes( "googleusercontent" ), false );
 	assert.equal( eligibleScenes( { scenes: [ { ...scene, sources: result.sources } ] } ).length, 1 );
-	const key = result.sources[ 0 ].split( "/" ).at( -1 ); assert.deepEqual( Buffer.from( await ( await photos.image( scene.id, key ) ).arrayBuffer() ), png );
+	const key = result.sources[ 0 ].split( "/" ).at( -1 ); const metadata = await sharp( Buffer.from( await ( await photos.image( scene.id, key ) ).arrayBuffer() ) ).metadata();assert.equal( metadata.format, "webp" );assert.equal( metadata.width, 1600 );assert.equal( metadata.height, 800 );
 	const count = mock.calls.length; await photos.refresh( scene ); assert.ok( mock.calls.length > count, "changing album selection refreshes immediately" );
 	const count2 = mock.calls.length; await photos.refresh( scene ); assert.equal(
 		mock.calls.length, count2, "ordinary tick reuses valid URLs"
@@ -147,7 +148,7 @@ test( "authenticated gallery API displays stacks, proxies bytes and guards bound
 		"/api/control", "POST", { action: "select", id: "gallery" }
 	) ).status, 200 );
 	assert.equal( server.snapshot().state.currentId, "gallery" );
-	const image = await req( gallery.sources[ 0 ] ); assert.equal( image.status, 200 ); assert.deepEqual( Buffer.from( await image.arrayBuffer() ), png );
+	const image = await req( gallery.sources[ 0 ] ); assert.equal( image.status, 200 ); assert.equal( image.headers.get( "content-type" ), "image/webp" );assert.equal( ( await sharp( Buffer.from( await image.arrayBuffer() ) ).metadata() ).format, "webp" );
 	assert.equal( ( await fetch( base + gallery.sources[ 0 ] ) ).status, 401 );
 	const state = await ( await req( "/api/state" ) ).json(); assert.equal( JSON.stringify( state ).includes( "private-" ), false ); assert.equal( JSON.stringify( state ).includes( "lh3.googleusercontent" ), false );
 	const config = { ...state.config, scenes: state.config.scenes.filter( s => s.id !== "gallery" ) };

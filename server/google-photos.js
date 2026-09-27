@@ -1,3 +1,4 @@
+import { webpImage, imageResponseBytes } from "./image-processing.js";
 import { randomUUID, createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
@@ -462,6 +463,8 @@ export class GooglePhotos {
 			throw fail( "Google konnte das Foto nicht laden.", 502 );
 		}
 
-		return r;
+		const converted = await webpImage( await imageResponseBytes( r ), "google-photos" );
+		signal?.throwIfAborted();
+		return new Response( converted, { headers: { "content-type": "image/webp" } } );
 	}
 }
