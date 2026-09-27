@@ -5,6 +5,7 @@ import path from "node:path";
 import { googleLink } from "../server/google-photos.js";
 import { createWallServer } from "../server/app.js";
 import { editMenu, installEditingContextMenu } from "./editing.js";
+import { installWindowMode } from "./window-mode.js";
 const windows = new Map();
 
 let service, admin, closing = false, showAdmin = () => {};
@@ -26,9 +27,9 @@ if ( !app.requestSingleInstanceLock() ) {
 			const win = new BrowserWindow( {
 				...options,
 				webPreferences: {
-					contextIsolation: true, nodeIntegration: false, sandbox: true
+					contextIsolation: true, nodeIntegration: false, sandbox: true, preload: path.join( app.getAppPath(), "electron/preload.cjs" )
 				}
-			} );installEditingContextMenu( win );win.webContents.setWindowOpenHandler( ( { url } ) => {
+			} );installEditingContextMenu( win );installWindowMode( win, { origin: `http://127.0.0.1:${port}`, config: () => service.store.config } );win.webContents.setWindowOpenHandler( ( { url } ) => {
 				if ( googleLink( url ) ) {
 					void shell.openExternal( url );
 				}
@@ -57,12 +58,8 @@ if ( !app.requestSingleInstanceLock() ) {
 
 				if ( d && !windows.has( m.id ) ) {
 					const win = createWindow( {
-						...d.bounds, frame: false, fullscreen: true, backgroundColor: "#000", autoHideMenuBar: true
-					}, `/wall?monitor=${m.id}` );windows.set( m.id, win );win.on( "closed", () => windows.delete( m.id ) );win.webContents.on( "before-input-event", ( event, input ) => {
-						if ( input.type === "keyDown" && input.key === "Escape" ) {
-							win.setFullScreen( false );showAdmin();event.preventDefault();
-						}
-					} );
+						...d.bounds, frame: false, fullscreen: process.platform !== "darwin", simpleFullscreen: process.platform === "darwin", backgroundColor: "#000", autoHideMenuBar: true
+					}, `/wall?monitor=${m.id}` );windows.set( m.id, win );win.on( "closed", () => windows.delete( m.id ) );
 				}
 			}
 		}
@@ -80,11 +77,19 @@ if ( !app.requestSingleInstanceLock() ) {
 				} );
 			}
 
-			admin.show();admin.focus();
+			admin.show();admin.focus();admin.webContents.send( "wall:navigate", "/admin" );
 		};
 
 		showAdmin();sync( service.store.config );
-		Menu.setApplicationMenu( Menu.buildFromTemplate( [ { label: "Monitor Wall", submenu: [ { label: "Verwaltung", click: showAdmin }, { label: "Bilderwand starten", click: () => sync( service.store.config ) }, { type: "separator" }, { role: "quit" } ] }, editMenu, { label: "Ansicht", submenu: [ { role: "reload" }, { role: "toggleDevTools" }, { role: "togglefullscreen" } ] } ] ) );
+		Menu.setApplicationMenu( Menu.buildFromTemplate( [ {
+			label:   "Monitor Wall",
+			submenu: [ { label: "Verwaltung", click: showAdmin }, {
+				label: "Bilderwand starten",
+				click: () => {
+					sync( service.store.config );admin?.webContents.send( "wall:navigate", "/wall" );
+				}
+			}, { type: "separator" }, { role: "quit" } ]
+		}, editMenu, { label: "Ansicht", submenu: [ { role: "reload" }, { role: "toggleDevTools" }, { role: "togglefullscreen" } ] } ] ) );
 
 		for ( const e of [ "display-added", "display-removed", "display-metrics-changed" ] ) {
 			screen.on( e, () => {

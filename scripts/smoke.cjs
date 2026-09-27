@@ -1,5 +1,5 @@
 const {
-	app, BrowserWindow, Menu, clipboard, ClipboardItem
+	app, BrowserWindow, Menu, clipboard, ClipboardItem, screen
 } = require( "electron" );
 const fs = require( "node:fs/promises" );
 const path = require( "node:path" );
@@ -9,6 +9,7 @@ app.whenReady().then( async() => {
 	const { createWallServer } = await import( "../server/app.js" );
 	const { fakePicker } = await import( "../tests/fixtures/google-picker.js" );
 	const { editMenu, installEditingContextMenu } = await import( "../electron/editing.js" );
+	const { installWindowMode } = await import( "../electron/window-mode.js" );
 	const google = fakePicker();
 	const directory = await fs.mkdtemp( "/private/tmp/wall-electron-" );
 	let service, win;
@@ -22,13 +23,14 @@ app.whenReady().then( async() => {
 		win = new BrowserWindow( {
 			width:          1440,
 			height:         1080,
-			show:           false,
+			show:           true,
 			webPreferences: {
-				contextIsolation: true, nodeIntegration: false, sandbox: true, offscreen: true, backgroundThrottling: false
+				contextIsolation: true, nodeIntegration: false, sandbox: true, backgroundThrottling: false, preload: path.resolve( __dirname, "../electron/preload.cjs" )
 			}
 		} );
 		Menu.setApplicationMenu( Menu.buildFromTemplate( [ editMenu ] ) );
 		installEditingContextMenu( win );
+		installWindowMode( win, { origin: base, config: () => service.store.config } );
 		const errors = [];win.webContents.on( "console-message", event => {
 			if ( event.level === "error" ) {
 				errors.push( event.message );
@@ -36,6 +38,7 @@ app.whenReady().then( async() => {
 		} );
 		await win.loadURL( `${base}/admin#token=${service.token}` );
 		const run = code => win.webContents.executeJavaScript( code );
+		const isFullscreen = () => win.isFullScreen() || process.platform === "darwin" && win.isSimpleFullScreen();
 
 		async function waitFor( code ) {
 			const end = Date.now() + 10000;
@@ -86,11 +89,61 @@ app.whenReady().then( async() => {
 		assert.equal(
 			await run( "document.documentElement.scrollWidth<=window.innerWidth" ), true, "Mobile horizontal overflow"
 		);
-		await win.loadURL( `${base}/wall#token=${service.token}` );
+		const historyLength = await run( "history.length" );
+		const adminBounds = win.getBounds(), displayBounds = screen.getDisplayMatching( adminBounds ).bounds;
+		assert.equal(
+			await run( "(async()=>{window.__navigationSentinel=true;const button=Array.from(document.querySelectorAll('button')).find(e=>e.innerText.includes('Bilderwand öffnen'));button.click();button.click();await Promise.resolve();return button.classList.contains('v-btn--loading')&&button.disabled;})()" ), true, "Navigation immediately shows a spinner and disables repeated clicks"
+		);
 		await waitFor( "document.querySelector('.wall-world')&&document.querySelector('.scene-layer')" );
+		await waitFor( "location.pathname==='/wall'" );
+		assert.equal(
+			isFullscreen(), true, "Wall must enter native fullscreen"
+		);
+		assert.deepEqual(
+			win.getBounds(), displayBounds, "Wall must fill the physical display at its top-left corner"
+		);
+		assert.equal(
+			await run( "window.__navigationSentinel&&history.length===" + ( historyLength + 1 ) ), true, "A repeated click switches once without reloading"
+		);
 		assert.equal( await run( "document.querySelectorAll('.monitor-overlay').length" ), 4 );
-		await win.loadURL( `${base}/admin#token=${service.token}` );
+		await run( "document.querySelector('.wall-pulldown button').click()" );
+		await waitFor( "Array.from(document.querySelectorAll('button')).some(e=>e.innerText.includes('Verwaltung öffnen')&&!e.disabled)" );
+		assert.equal(
+			await run( "(async()=>{const button=Array.from(document.querySelectorAll('button')).find(e=>e.innerText.includes('Verwaltung öffnen'));button.click();await Promise.resolve();return button.classList.contains('v-btn--loading')&&button.disabled;})()" ), true, "Return navigation also shows a spinner"
+		);
 		await waitFor( "document.body.innerText.includes('Schön, zu Hause zu sein.')" );
+		assert.equal(
+			isFullscreen(), false, "Administration must leave native fullscreen"
+		);
+		assert.deepEqual(
+			win.getBounds(), adminBounds, "Administration must restore its previous position and size"
+		);
+		assert.equal(
+			await run( "window.__navigationSentinel&&location.pathname==='/admin'" ), true, "Return to administration keeps the same document"
+		);
+		await run( "history.back()" );
+		await waitFor( "location.pathname==='/wall'&&!!document.querySelector('.fullscreen-wall')" );
+		assert.equal(
+			isFullscreen(), true, "History back must also enter native fullscreen"
+		);
+		await waitFor( "!document.querySelector('[aria-busy=true]')" );
+		await new Promise( resolve => setTimeout( resolve, 100 ) );
+		await run( "history.forward()" );
+		await waitFor( "location.pathname==='/admin'&&!!document.querySelector('.admin-content')" );
+		assert.equal(
+			isFullscreen(), false, "History forward must restore the administration window"
+		);
+		assert.deepEqual( win.getBounds(), adminBounds );
+		await waitFor( "!document.querySelector('[aria-busy=true]')" );
+		await run( "Array.from(document.querySelectorAll('button')).find(e=>e.innerText.includes('Bilderwand öffnen')).click()" );
+		await waitFor( "location.pathname==='/wall'&&!document.querySelector('[aria-busy=true]')" );
+		win.webContents.sendInputEvent( { type: "keyDown", keyCode: "Escape" } );
+		win.webContents.sendInputEvent( { type: "keyUp", keyCode: "Escape" } );
+		await waitFor( "location.pathname==='/admin'&&!!document.querySelector('.admin-content')" );
+		assert.equal(
+			isFullscreen(), false, "Escape must return to administration and leave fullscreen"
+		);
+		assert.deepEqual( win.getBounds(), adminBounds );
 		await run( "Array.from(document.querySelectorAll('.v-list-item')).find(e=>e.innerText.includes('API-Einstellungen')).click()" );
 		await waitFor( "document.querySelectorAll('.api-card').length===9" );
 		assert.equal(
@@ -161,7 +214,7 @@ app.whenReady().then( async() => {
 		await service.connections.saveSecrets( "google-ambient", { refreshToken: "private-refresh" } );
 		await service.photos.connectScene( galleryScene );await service.photos.refresh( galleryScene );service.broadcast();
 		await run( `fetch('/api/control',{method:'POST',headers:{Authorization:'Bearer ${service.token}','Content-Type':'application/json'},body:JSON.stringify({action:'select',id:'cloud-gallery'})}).then(r=>r.json())` );
-		await waitFor( "document.querySelectorAll('.stack-monitor').length===4&&document.querySelectorAll('.stack-monitor img').length===28" );
+		await waitFor( "document.querySelectorAll('.stack-monitor').length===4&&document.querySelectorAll('.stack-monitor img').length===100" );
 		await waitFor( "Array.from(document.querySelectorAll('.stack-monitor img')).every(img=>img.complete&&img.naturalWidth>0)" );
 		await win.loadURL( `${base}/admin#token=${service.token}` );
 		await waitFor( "document.body.innerText.includes('Schön, zu Hause zu sein.')" );
@@ -199,7 +252,7 @@ app.whenReady().then( async() => {
 		await win.loadURL( `${base}/wall#token=${service.token}` );
 		await waitFor( "!!document.querySelector('.wall-world')" );
 		await run( `fetch('/api/control',{method:'POST',headers:{Authorization:'Bearer ${service.token}','Content-Type':'application/json'},body:JSON.stringify({action:'select',id:'picked-gallery'})}).then(r=>r.json())` );
-		await waitFor( "document.querySelectorAll('.stack-monitor img').length===28&&Array.from(document.querySelectorAll('.stack-monitor img')).every(img=>img.complete&&img.naturalWidth>0&&img.src.includes('/media/google-picker-'))" );
+		await waitFor( "document.querySelectorAll('.stack-monitor img').length===100&&Array.from(document.querySelectorAll('.stack-monitor img')).every(img=>img.complete&&img.naturalWidth>0&&img.src.includes('/media/google-picker-'))" );
 
 		assert.deepEqual( errors, [] );
 		console.log( "Electron UI smoke passed: desktop, mobile, media, widget dialog, settings, wall, central API settings, OAuth clipboard/context menu, Ambient gallery, Picker multi-photo import and image stacks." );

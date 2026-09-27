@@ -10,6 +10,8 @@ import GooglePhotosGallery from "./GooglePhotosGallery.vue";
 import GooglePhotosPicker from "./GooglePhotosPicker.vue";
 import ApiSettings from "./ApiSettings.vue";
 import { apiTypeForScene } from "../../shared/api-types";
+defineProps( { navigating: Boolean } );
+const emit = defineEmits( [ "navigate" ] );
 const tab = ref( "overview" ), drawer = ref( false ), busy = ref( false ), notice = ref( "" ), query = ref( "" ), filter = ref( "all" ), sceneDialog = ref( false ), editing = ref( null ), widgetDialog = ref( false ), widget = ref( null ), dialogError = ref( "" ), settings = ref( null ), monitorDraft = ref( [] ), uploadInput = ref(), uploadTarget = ref( null );
 const urlDialog = ref( false ), panoramaUrl = ref( "" ), urlError = ref( "" ), downloading = ref( false );
 const nav = [ {
@@ -40,6 +42,26 @@ const types = [ {
 } ];
 const positions = [ { title: "Oben links", value: "top-left" }, { title: "Oben mittig", value: "top-center" }, { title: "Oben rechts", value: "top-right" }, { title: "Unten links", value: "bottom-left" }, { title: "Unten mittig", value: "bottom-center" }, { title: "Unten rechts", value: "bottom-right" } ];
 const seasons = [ { title: "Frühling", value: "spring" }, { title: "Sommer", value: "summer" }, { title: "Herbst", value: "autumn" }, { title: "Winter", value: "winter" } ];
+const dayPeriods = [
+	{
+		title: "früh · 0–10 Uhr", value: "early", start: 0, end: 10
+	},
+	{
+		title: "mittags · 10–15 Uhr", value: "midday", start: 10, end: 15
+	},
+	{
+		title: "abends · 15–20 Uhr", value: "evening", start: 15, end: 20
+	},
+	{
+		title: "nachts · 20–24 Uhr", value: "night", start: 20, end: 24
+	}
+];
+const selectedDayPeriods = computed( {
+	get: () => dayPeriods.filter( period => editing.value?.hours.some( hour => hour >= period.start && hour < period.end ) ).map( period => period.value ),
+	set: selected => {
+		editing.value.hours = dayPeriods.filter( period => selected.includes( period.value ) ).flatMap( period => Array.from( { length: period.end - period.start }, ( _, index ) => period.start + index ) );
+	}
+} );
 const widgetIcons = {
 	clock: "mdi-clock-outline", title: "mdi-format-title", weather: "mdi-weather-partly-cloudy", transit: "mdi-bus", school: "mdi-school-outline", mpd: "mdi-music-note-outline", calendar: "mdi-calendar-outline", cameras: "mdi-cctv", soccer: "mdi-soccer"
 };
@@ -335,10 +357,12 @@ watch( () => wall.config.scenes.find( s => s.id === editing.value?.id )?.sources
 			prepend-icon="mdi-plus"
 			@click="addWidget"
 		>Modul hinzufügen</v-btn><v-btn v-else-if="tab==='overview'"
-			href="/wall"
+			:aria-busy="navigating"
+			:disabled="navigating"
+			:loading="navigating"
 			prepend-icon="mdi-arrow-top-right"
-			target="_blank"
 			variant="outlined"
+			@click="emit('navigate','/wall')"
 		>Bilderwand öffnen</v-btn></div>
 		<template v-if="tab==='overview'">
 			<section class="preview-card"><div class="section-top"><div class="d-flex align-center ga-3"><span class="live-tag">LIVE-VORSCHAU</span><span class="muted">{{wall.config.monitors.filter(m=>m.enabled).length}} Monitore · eine Leinwand</span></div><v-icon color="secondary" icon="mdi-monitor-multiple"/></div><WallCanvas class="dashboard-preview" preview/><div class="playback-bar"><div class="scene-caption"><span class="tiny-label">JETZT AUF DER BILDERWAND</span><strong>{{current?.title||'Keine aktive Szene'}}</strong><span class="muted">{{types.find(t=>t.value===current?.type)?.title}} <span v-if="current">· {{current.category}}</span></span></div><div class="playback-buttons"><v-btn aria-label="Vorherige Szene"
@@ -506,10 +530,10 @@ watch( () => wall.config.scenes.find( s => s.id === editing.value?.id )?.sources
 	:items="seasons"
 	label="Jahreszeiten · leer = ganzjährig"
 	multiple
-/><v-select v-model="editing.hours"
+/><v-select v-model="selectedDayPeriods"
 	chips
-	:items="Array.from({ length:24 },(_,i)=>({ title:`${i}:00 – ${i}:59`,value:i }))"
-	label="Tagesstunden · leer = jederzeit"
+	:items="dayPeriods"
+	label="Tageszeiten · leer = jederzeit"
 	multiple
 /><div class="coordinate-grid"><v-select v-model="editing.weight" :items="[ 1,2,3,4,5 ]" label="Priorität"/><v-text-field v-model.number="editing.scrollSeconds"
 	label="Panorama-Scrollzyklus"

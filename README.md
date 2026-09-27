@@ -11,7 +11,7 @@ npm install
 npm run dev
 ```
 
-Electron öffnet die Verwaltung. Unter **Monitore** die erkannten physischen Bildschirme zuordnen und das Layout speichern; anschließend öffnen sich deren Bilderwandfenster. Bildschirmkoordinaten und Größen werden bei der Zuordnung übernommen. Virtuelle Monitore ohne Zuordnung dienen der Vorschau. Escape verlässt im jeweiligen Fenster den Vollbildmodus. Die App-Menüleiste bietet Verwaltung und Bilderwandstart.
+Electron öffnet die Verwaltung. **Bilderwand öffnen** schaltet dasselbe Fenster auf Vollbild auf dem aktuellen physischen Bildschirm um. **Verwaltung öffnen** oder Escape stellt die vorherige Fensterposition, Größe und Maximierung wieder her. Auf macOS bleibt das Vollbild auf dem aktuellen Desktop. Unter **Monitore** die erkannten physischen Bildschirme zuordnen und das Layout speichern; anschließend öffnen sich deren separate Bilderwandfenster im Vollbild auf den zugewiesenen Bildschirmen. Bildschirmkoordinaten und Größen werden bei der Zuordnung übernommen. Virtuelle Monitore ohne Zuordnung dienen der Vorschau. Die App-Menüleiste bietet Verwaltung und Bilderwandstart.
 
 Für die Verwaltung ohne Electron:
 
