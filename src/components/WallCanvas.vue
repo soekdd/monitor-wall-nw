@@ -25,7 +25,7 @@ function stackStyle(i,m){const n=i+monitors.value.indexOf(m)*5;return{left:`${18
     <div v-if="scene.type==='panorama'" class="panorama" :style="{backgroundImage:`url('${mediaUrl(sources[imageIndex])}')`,backgroundPosition:`center ${50-50*Math.cos(elapsed/scene.scrollSeconds*Math.PI*2)}%`}"></div>
     <iframe v-else-if="scene.type==='html'" :src="mediaUrl(sources[0])" sandbox="allow-scripts" title="Hinterlegte HTML-Seite" referrerpolicy="no-referrer" class="html-scene"></iframe>
     <div v-else-if="scene.type==='fit'" class="fit-scene"><img :src="mediaUrl(sources[imageIndex])" alt="" /></div>
-    <template v-else-if="['stack','google-photos'].includes(scene.type)&&sources.length"><div v-for="m in monitors" :key="m.id" class="stack-monitor" :style="monitorStyle(m)"><img v-for="i in 7" :key="i" :src="mediaUrl(sources[(i+imageIndex+monitors.indexOf(m)*7)%sources.length])" alt="" :style="stackStyle(i,m)" /></div></template>
+    <template v-else-if="['stack','google-photos','google-picker'].includes(scene.type)&&sources.length"><div v-for="m in monitors" :key="m.id" class="stack-monitor" :style="monitorStyle(m)"><img v-for="i in 7" :key="i" :src="mediaUrl(sources[(i+imageIndex+monitors.indexOf(m)*7)%sources.length])" alt="" :style="stackStyle(i,m)" /></div></template>
    </div></Transition>
    <div v-if="!scene" class="empty-wall">Keine Szene für diese Tageszeit. Medien hinzufügen oder Filter anpassen.</div>
    <div v-for="m in monitors" :key="m.id" class="monitor-overlay" :style="monitorStyle(m)">

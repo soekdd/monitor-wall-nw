@@ -48,6 +48,7 @@
       "dist/**",
       "electron/**",
       "server/**",
+      "shared/**",
       "package.json"
     ],
     "mac": {

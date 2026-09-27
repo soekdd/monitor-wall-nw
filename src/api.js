@@ -2,7 +2,7 @@ import { reactive } from 'vue';
 const fragment=new URLSearchParams(location.hash.slice(1));
 let token=fragment.get('token')||sessionStorage.getItem('wall-token')||'';
 if(fragment.has('token')){sessionStorage.setItem('wall-token',token);history.replaceState(null,'',location.pathname+location.search);}
-export const wall=reactive({config:null,state:{},widgets:{},googlePhotos:{galleries:{}},displays:[],addresses:[],connected:false,error:'',authenticated:false});
+export const wall=reactive({config:null,state:{},widgets:{},apiStatus:{},googlePhotos:{galleries:{}},displays:[],addresses:[],connected:false,error:'',authenticated:false});
 let events;
 export const getToken=()=>token;
 export function createId(){return globalThis.crypto.randomUUID?.()||Array.from(globalThis.crypto.getRandomValues(new Uint8Array(16)),n=>n.toString(16).padStart(2,'0')).join('');}

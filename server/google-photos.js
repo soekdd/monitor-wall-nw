@@ -1,12 +1,21 @@
 import { randomUUID, createHash } from 'node:crypto';
+import { readdir, readFile } from 'node:fs/promises';
+import path from 'node:path';
 
 const API = 'https://photosambient.googleapis.com/v1';
 const SCOPE = 'https://www.googleapis.com/auth/photosambient.mediaitems';
 const REFRESH_MS = 40 * 60 * 1000;
 const fail = (message, status = 400) => Object.assign(new Error(message), { status });
 const imageTypes = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif']);
+function responseError(data, status, url) {
+  const message = data.error?.message || data.error_description || (typeof data.error === 'string' ? data.error : `HTTP ${status}`);
+  const partnerDenied = status === 403 && url.startsWith(API + '/') && /partner(?:\s+program|-program)/i.test(message);
+  return Object.assign(fail(partnerDenied
+    ? 'Google Photos Ambient API ist für dieses Projekt nicht freigeschaltet. Dafür ist eine Aufnahme ins Google Photos Partnerprogramm erforderlich. OAuth-Anmeldung und Testnutzer-Freigabe allein reichen nicht aus. Informationen: https://developers.google.com/photos/partner-program/overview'
+    : `Google Photos: ${message}`, partnerDenied ? 403 : 502), { googleCode: typeof data.error === 'string' ? data.error : data.error?.status });
+}
 export function googleLink(value) {
-  try { const u = new URL(value); return u.protocol === 'https:' && ['photos.google.com', 'accounts.google.com', 'www.google.com'].includes(u.hostname) && !u.username && !u.password; } catch { return false; }
+  try { const u = new URL(value); return u.protocol === 'https:' && (['photos.google.com', 'accounts.google.com', 'www.google.com'].includes(u.hostname) || (u.hostname === 'developers.google.com' && u.pathname === '/photos/partner-program/overview')) && !u.username && !u.password; } catch { return false; }
 }
 function photoUrl(value) {
   const u = new URL(value);
@@ -14,29 +23,60 @@ function photoUrl(value) {
   return u.href;
 }
 export class GooglePhotos {
-  constructor(store, { fetchImpl = fetch, now = Date.now } = {}) {
+  constructor(store, { fetchImpl = fetch, now = Date.now, scope = SCOPE } = {}) {
     this.store = store; this.fetch = fetchImpl; this.now = now;
+    this.scope = scope;
     this.galleries = {}; this.auth = null; this.access = null; this.tokenRequest = null; this.pending = new Map(); this.nextRefresh = new Map(); this.listRequests = new Map();
   }
   get credentials() { return this.store.secrets.googlePhotos || {}; }
-  status() { return { configured: !!(this.credentials.clientId && this.credentials.clientSecret), connected: !!this.credentials.refreshToken, galleries: this.publicGalleries() }; }
+  status() { return { configured: !!(this.credentials.clientId && this.credentials.clientSecret), connected: !!this.credentials.refreshToken, credentialSource: this.credentialSource, configurationError: this.configurationError, galleries: this.publicGalleries() }; }
+  async loadCredentials(directory, file) {
+    if (!directory && !file) return;
+    try {
+      if (!file) {
+        let names;
+        try { names = await readdir(directory); } catch (e) { if (e.code === 'ENOENT') return; throw e; }
+        const candidates = names.filter(name => /^client_secret(?:_.+)?\.json$/.test(name) && name!=='client_secret_picker.json');
+        if (!candidates.length) return;
+        if (candidates.length > 1) throw fail('Mehrere Google-OAuth-Dateien in config/. Bitte nur eine client_secret-Datei ablegen oder WALL_GOOGLE_OAUTH_FILE setzen.');
+        file = path.join(directory, candidates[0]);
+      }
+      let data;
+      try { data = JSON.parse(await readFile(file, 'utf8')); } catch { throw fail('Die Google-OAuth-Datei ist nicht lesbar oder enthält kein gültiges JSON.'); }
+      if (data?.web) throw fail('Die OAuth-Datei enthält einen Web-Client. Für Google Photos bitte einen Client vom Typ „TVs und Geräte mit begrenzter Eingabe“ erstellen.');
+      const client = data?.installed;
+      if (!client || typeof client !== 'object') throw fail('Die OAuth-Datei enthält keine Google-Zugangsdaten unter „installed“. Bitte die heruntergeladene Google-Client-JSON verwenden.');
+      await this.configure({ clientId: client.client_id, clientSecret: client.client_secret });
+      this.credentialSource = path.basename(file);
+    } catch (e) { this.configurationError = e.message; }
+  }
   async configure({ clientId, clientSecret }) {
+    if (this.auth?.busy) throw fail('Bitte die laufende Google-Anmeldung abwarten.', 409);
     if (typeof clientId !== 'string' || !clientId.endsWith('.apps.googleusercontent.com') || clientId.length > 500 || typeof clientSecret !== 'string' || !clientSecret || clientSecret.length > 2000 || /[\r\n]/.test(clientId + clientSecret)) throw fail('Bitte eine gültige Google-Client-ID und ein Client-Secret eingeben.');
     if (this.credentials.clientId && this.credentials.clientId !== clientId && Object.keys(this.credentials.devices || {}).length) throw fail('Zuerst alle Galerien trennen, bevor du den Google-OAuth-Client wechselst.');
-    await this.store.updateSecrets(s => ({ ...s, googlePhotos: { ...s.googlePhotos, clientId, clientSecret } }));
+    const changed = this.credentials.clientId !== clientId;
+    await this.store.updateSecrets(s => ({ ...s, googlePhotos: { ...s.googlePhotos, ...(changed ? { refreshToken: undefined } : {}), clientId, clientSecret } }));
+    this.credentialSource = undefined; this.configurationError = undefined;
     this.access = null; this.auth = null;
   }
   async json(url, options = {}) {
     const r = await this.fetch(url, { ...options, signal: AbortSignal.timeout(15000), redirect: 'error' });
     const d = await r.json();
-    if (!r.ok) throw Object.assign(fail(`Google Photos: ${d.error?.message || d.error_description || (typeof d.error === 'string' ? d.error : `HTTP ${r.status}`)}`, 502), { googleCode: typeof d.error === 'string' ? d.error : d.error?.status });
+    if (!r.ok) throw responseError(d, r.status, url);
     return d;
   }
   async startLogin() {
     const c = this.credentials;
+    if (this.configurationError) throw fail(this.configurationError);
     if (!c.clientId || !c.clientSecret) throw fail('Bitte zuerst den Google-OAuth-Client einrichten.');
     if (this.auth && this.auth.expiresAt > this.now()) return this.loginView();
-    const d = await this.json('https://oauth2.googleapis.com/device/code', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ client_id: c.clientId, scope: SCOPE }) });
+    let d;
+    try {
+      d = await this.json('https://oauth2.googleapis.com/device/code', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ client_id: c.clientId, scope: this.scope }) });
+    } catch (e) {
+      if (e.googleCode === 'invalid_client') throw fail('Google lehnt den OAuth-Client ab (invalid_client). Bei „Invalid client type“: In der Google Cloud Console einen neuen OAuth-Client vom Typ „TVs und Geräte mit begrenzter Eingabe“ erstellen, dessen JSON in config/ ersetzen und die Anwendung neu starten. Desktop- und Web-Clients unterstützen diese Anmeldung nicht.', 400);
+      throw e;
+    }
     if (!googleLink(d.verification_url) || !d.device_code || !d.user_code) throw fail('Google hat keine gültige Anmeldung zurückgegeben.', 502);
     this.auth = { deviceCode: d.device_code, userCode: d.user_code, url: d.verification_url, expiresAt: this.now() + Number(d.expires_in) * 1000, interval: Math.max(5, Number(d.interval) || 5) * 1000, nextPoll: this.now() + Math.max(5, Number(d.interval) || 5) * 1000 };
     return this.loginView();
@@ -73,7 +113,7 @@ export class GooglePhotos {
   }
   async api(route, method = 'GET', body) {
     const options = { method, headers: { Authorization: `Bearer ${await this.accessToken()}`, ...(body ? { 'Content-Type': 'application/json' } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) };
-    if (method === 'DELETE') { const r = await this.fetch(API + route, { ...options, signal: AbortSignal.timeout(15000), redirect: 'error' }); if (!r.ok && r.status !== 404) throw fail(`Google-Gerät konnte nicht getrennt werden (HTTP ${r.status}).`, 502); return; }
+    if (method === 'DELETE') { const r = await this.fetch(API + route, { ...options, signal: AbortSignal.timeout(15000), redirect: 'error' }); if (!r.ok && r.status !== 404) { const data = await r.json().catch(() => ({})); throw responseError(data, r.status, API + route); } return; }
     return this.json(API + route, options);
   }
   async connectScene(scene) {
