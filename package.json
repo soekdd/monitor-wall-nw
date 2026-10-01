@@ -9,7 +9,8 @@
     "dev": "node scripts/dev.js",
     "dev:web": "node server/index.js --dev",
     "build": "vite build",
-    "start": "electron .",
+    "start": "node scripts/start.js",
+    "stop": "node scripts/stop.js",
     "start:web": "node server/index.js",
     "test": "node --test tests/*.test.js",
     "dist": "npm run build && electron-builder",
@@ -63,5 +64,9 @@
     "linux": {
       "target": "AppImage"
     }
+  },
+  "allowScripts": {
+    "electron-winstaller@5.4.0": true,
+    "esbuild@0.28.2": true
   }
 }

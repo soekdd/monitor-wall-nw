@@ -13,6 +13,8 @@ npm run dev
 
 Electron öffnet die Verwaltung. **Bilderwand öffnen** schaltet dasselbe Fenster auf Vollbild auf dem aktuellen physischen Bildschirm um. **Verwaltung öffnen** oder Escape stellt die vorherige Fensterposition, Größe und Maximierung wieder her. Auf macOS bleibt das Vollbild auf dem aktuellen Desktop. Unter **Monitore** die erkannten physischen Bildschirme zuordnen und das Layout speichern; anschließend öffnen sich deren separate Bilderwandfenster im Vollbild auf den zugewiesenen Bildschirmen. Bildschirmkoordinaten und Größen werden bei der Zuordnung übernommen. Virtuelle Monitore ohne Zuordnung dienen der Vorschau. Die App-Menüleiste bietet Verwaltung und Bilderwandstart.
 
+Gleich benannte Monitore werden in der Auswahl zusätzlich durch Auflösung, Position und interne Display-ID unterschieden. Unter Linux startet Electron über XWayland, weil native Wayland-Fenster nicht zuverlässig anhand globaler Bildschirmkoordinaten auf mehreren Displays platziert werden können. Wegen Abstürzen des Electron-GPU-Prozesses mit dem `nouveau`-Treiber verwendet die Linux-Ausgabe standardmäßig Software-Compositing. Nach einem Wechsel auf einen kompatiblen Grafiktreiber lässt sich die Hardwarebeschleunigung testweise mit `WALL_ENABLE_GPU=1 npm start` aktivieren.
+
 Für die Verwaltung ohne Electron:
 
 ```sh
@@ -32,6 +34,10 @@ npm run lint:fix           # Automatisch korrigierbare Regelverstöße beheben
 npm test                   # Backendtests
 npm run test:electron      # UI-Smoke-Test in der Electron-Laufzeit
 ```
+
+## Anwendung beenden
+
+`npm run stop` sendet der laufenden Electron-Anwendung ein `SIGTERM`. Electron führt daraufhin seinen normalen Beenden-Pfad aus, schließt den Backend-Dienst und entfernt die PID-Datei. Falls keine Instanz läuft, beendet sich der Befehl ohne Fehler. Dateien, Einstellungen und Nutzerdaten werden dabei nicht gelöscht.
 
 ESLint prüft die aktuelle Anwendung einschließlich Server, Electron und Tests. `old/`, lokale Daten und Zugangsdaten sowie generierte Dateien sind ausgeschlossen. Die Formatregeln verwenden Tabs und doppelte Anführungszeichen; `npm run lint -- --fix` funktioniert ebenfalls. Nicht automatisch korrigierbare Probleme müssen anhand der ESLint-Meldungen behoben werden.
 

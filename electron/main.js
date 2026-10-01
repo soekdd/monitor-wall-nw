@@ -1,27 +1,54 @@
 import {
 	app, BrowserWindow, screen, Menu, shell
 } from "electron";
+import {
+	mkdirSync, rmSync, writeFileSync
+} from "node:fs";
 import path from "node:path";
 import { googleLink } from "../server/google-photos.js";
 import { createWallServer } from "../server/app.js";
 import { editMenu, installEditingContextMenu } from "./editing.js";
+import { displayName, findDisplay } from "./displays.js";
 import { installWindowMode } from "./window-mode.js";
 const windows = new Map();
+const pidFile = path.join( app.getPath( "userData" ), "monitor-wall.pid" );
 
 let service, admin, closing = false, showAdmin = () => {};
 
+// Wayland does not let applications place top-level windows at screen
+// coordinates. The wall therefore uses XWayland on Linux so that each
+// fullscreen window can be moved to its assigned physical display first.
+if ( process.platform === "linux" ) {
+	// Electron's X11 GPU process crashes with the nouveau driver used by the
+	// multi-output NVIDIA card. Software compositing is stable and can be
+	// overridden after a driver change without another code modification.
+	if ( process.env.WALL_ENABLE_GPU !== "1" ) {
+		app.disableHardwareAcceleration();
+	}
+}
+
 if ( !app.requestSingleInstanceLock() ) {
+	console.log( "Monitor Wall läuft bereits; die vorhandene Instanz wird aktiviert." );
 	app.quit();
 } else {
 	app.on( "second-instance", () => {
 		showAdmin();
 	} );
 	app.whenReady().then( async() => {
+		mkdirSync( path.dirname( pidFile ), { recursive: true } );
+		writeFileSync(
+			pidFile, `${process.pid}\n`, { mode: 0o600 }
+		);
 		const port = Number( process.env.WALL_PORT ) || 3210;
 		const local = route => `http://127.0.0.1:${port}${route}#token=${service.token}`;
-		const available = () => screen.getAllDisplays().map( d => ( {
-			id: String( d.id ), name: d.label || `Display ${d.id}`, bounds: d.bounds, scaleFactor: d.scaleFactor, primary: d.id === screen.getPrimaryDisplay().id
-		} ) );
+
+		const available = () => {
+			const primaryId = screen.getPrimaryDisplay().id;
+
+			return screen.getAllDisplays().map( d => ( {
+				id: String( d.id ), name: displayName( d, primaryId ), bounds: d.bounds, scaleFactor: d.scaleFactor, primary: d.id === primaryId
+			} ) );
+		};
 
 		function createWindow( options, route ) {
 			const win = new BrowserWindow( {
@@ -43,8 +70,10 @@ if ( !app.requestSingleInstanceLock() ) {
 		}
 
 		function sync( config ) {
+			const displays = screen.getAllDisplays();
+
 			for ( const [ id, win ] of windows ) {
-				const m = config.monitors.find( m => m.id === id && m.enabled );const d = m && screen.getAllDisplays().find( d => String( d.id ) === m.displayId );
+				const m = config.monitors.find( m => m.id === id && m.enabled );const d = findDisplay( displays, m );
 
 				if ( !d ) {
 					win.close();windows.delete( id );
@@ -54,11 +83,11 @@ if ( !app.requestSingleInstanceLock() ) {
 			}
 
 			for ( const m of config.monitors.filter( m => m.enabled && m.displayId ) ) {
-				const d = screen.getAllDisplays().find( d => String( d.id ) === m.displayId );
+				const d = findDisplay( displays, m );
 
 				if ( d && !windows.has( m.id ) ) {
 					const win = createWindow( {
-						...d.bounds, frame: false, fullscreen: process.platform !== "darwin", simpleFullscreen: process.platform === "darwin", backgroundColor: "#000", autoHideMenuBar: true
+						...d.bounds, frame: false, backgroundColor: "#000", autoHideMenuBar: true
 					}, `/wall?monitor=${m.id}` );windows.set( m.id, win );win.on( "closed", () => windows.delete( m.id ) );
 				}
 			}
@@ -81,6 +110,7 @@ if ( !app.requestSingleInstanceLock() ) {
 		};
 
 		showAdmin();sync( service.store.config );
+		console.log( `Monitor Wall läuft auf Port ${service.server.address().port} mit ${windows.size} Bilderwandfenstern.` );
 		Menu.setApplicationMenu( Menu.buildFromTemplate( [ {
 			label:   "Monitor Wall",
 			submenu: [ { label: "Verwaltung", click: showAdmin }, {
@@ -101,6 +131,8 @@ if ( !app.requestSingleInstanceLock() ) {
 			console.error( error );app.quit();
 		} );
 	app.on( "window-all-closed", () => app.quit() );
+	process.once( "SIGTERM", () => app.quit() );
+	app.on( "will-quit", () => rmSync( pidFile, { force: true } ) );
 	app.on( "before-quit", event => {
 		if ( service && !closing ) {
 			event.preventDefault();closing = true;service.close().finally( () => app.quit() );
