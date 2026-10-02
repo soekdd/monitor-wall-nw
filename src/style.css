@@ -601,6 +601,10 @@ h3 {
     border: 0
 }
 
+.scene-layer {
+    z-index: 0
+}
+
 .panorama {
     background-size: cover;
     background-repeat: no-repeat
@@ -636,6 +640,7 @@ h3 {
 
 .monitor-overlay {
     position: absolute;
+    z-index: 1;
     pointer-events: none;
     overflow: hidden
 }

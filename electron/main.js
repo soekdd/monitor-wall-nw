@@ -87,7 +87,7 @@ if ( !app.requestSingleInstanceLock() ) {
 
 				if ( d && !windows.has( m.id ) ) {
 					const win = createWindow( {
-						...d.bounds, frame: false, backgroundColor: "#000", autoHideMenuBar: true
+						...d.bounds, fullscreen: true, kiosk: true, frame: false, backgroundColor: "#000", autoHideMenuBar: true
 					}, `/wall?monitor=${m.id}` );windows.set( m.id, win );win.on( "closed", () => windows.delete( m.id ) );
 				}
 			}

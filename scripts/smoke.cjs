@@ -253,6 +253,18 @@ app.whenReady().then( async() => {
 		await waitFor( "!!document.querySelector('.wall-world')" );
 		await run( `fetch('/api/control',{method:'POST',headers:{Authorization:'Bearer ${service.token}','Content-Type':'application/json'},body:JSON.stringify({action:'select',id:'picked-gallery'})}).then(r=>r.json())` );
 		await waitFor( "document.querySelectorAll('.stack-monitor img').length===100&&Array.from(document.querySelectorAll('.stack-monitor img')).every(img=>img.complete&&img.naturalWidth>0&&img.src.includes('/media/google-picker-'))" );
+		const assignedMonitor = service.store.config.monitors.find( m => m.enabled ).id;
+
+		await win.loadURL( `${base}/wall?monitor=${encodeURIComponent( assignedMonitor )}#token=${service.token}` );
+		await waitFor( "!!document.querySelector('.wall-pulldown button')" );
+		await run( "document.querySelector('.wall-pulldown button').click()" );
+		await waitFor( "Array.from(document.querySelectorAll('button')).some(e=>e.innerText.includes('Verwaltung öffnen'))" );
+		await run( "Array.from(document.querySelectorAll('button')).find(e=>e.innerText.includes('Verwaltung öffnen')).click()" );
+		await waitFor( `location.pathname==='/admin'&&new URLSearchParams(location.search).get('monitor')==='${assignedMonitor}'` );
+		await win.loadURL( `${base}/admin?monitor=${encodeURIComponent( assignedMonitor )}#token=${service.token}` );
+		await waitFor( "document.body.innerText.includes('Schön, zu Hause zu sein.')" );
+		await run( "Array.from(document.querySelectorAll('button')).find(e=>e.innerText.includes('Bilderwand öffnen')).click()" );
+		await waitFor( `location.pathname==='/wall'&&new URLSearchParams(location.search).get('monitor')==='${assignedMonitor}'&&!!document.querySelector('.fullscreen-wall')` );
 
 		assert.deepEqual( errors, [] );
 		console.log( "Electron UI smoke passed: desktop, mobile, media, widget dialog, settings, wall, central API settings, OAuth clipboard/context menu, Ambient gallery, Picker multi-photo import and image stacks." );

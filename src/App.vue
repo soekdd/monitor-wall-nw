@@ -23,6 +23,10 @@ async function navigate( route, updateHistory = true ) {
 		return;
 	}
 
+	if ( monitor.value && [ "/wall", "/admin" ].includes( route ) ) {
+		route += `?monitor=${encodeURIComponent( monitor.value )}`;
+	}
+
 	navigating.value = true;
 
 	try {

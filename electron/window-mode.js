@@ -75,8 +75,17 @@ export function installWindowMode( win, { origin, config } ) {
 				}
 
 				win.setMenuBarVisibility( false );
+
+				if ( process.platform === "linux" && !win.isKiosk() ) {
+					win.setKiosk( true );
+				}
+
 				await fullscreen( win, true );
 			} else {
+				if ( win.isKiosk() ) {
+					win.setKiosk( false );
+				}
+
 				await fullscreen( win, false );
 
 				if ( saved ) {
