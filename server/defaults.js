@@ -39,7 +39,13 @@ export function defaults() {
 			"weather", "Wetter in Dresden", "weather", "m3", "bottom-left", { latitude: 51.05, longitude: 13.74 }, true
 		), widget(
 			"transit", "Bus & Bahn", "transit", "m4", "top-right", {
-				stop: "Fritz-Meinhard-Straße", minMinutes: 8, exclude: [], limit: 4
+				stops: [
+					{ name: "Fritz-Meinhardt-Straße", id: "33000790" },
+					{ name: "Georg-Palitzsch-Straße", id: "33000323" }
+				],
+				minMinutes:           8,
+				destinationBlacklist: [ "Goppeln", "Prohlis", "Lockwitz" ],
+				limit:                4
 			}
 		), widget(
 			"school", "Vertretungsplan", "school", "m3", "top-center", { url: "", rows: [] }

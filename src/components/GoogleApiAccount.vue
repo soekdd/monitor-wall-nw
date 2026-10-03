@@ -81,7 +81,7 @@ onUnmounted( () => clearTimeout( timer ) );
 	>{{setup?'OAuth-Einrichtung schließen':status.configured?'OAuth-Einrichtung ändern':'OAuth einrichten'}}</v-btn></div>
 	<p v-if="status.credentialSource" class="muted text-body-2 mt-3">OAuth-Zugangsdaten aus {{status.credentialSource}} geladen.</p>
 	<div v-if="setup" ref="setupForm" class="oauth-setup mt-4">
-		<p class="muted mb-4">{{api.type==='google-picker'?'Verwende einen OAuth-Client vom Typ „Desktop-App“. Lege die JSON als config/client_secret_picker.json ab. Die Google-Anmeldung muss im Browser auf dem Rechner der Bilderwand erfolgen.':'Verwende einen OAuth-Client vom Typ „TVs und Geräte mit begrenzter Eingabe“.'}} Die jeweilige API muss in Google Cloud aktiviert sein.</p>
+		<p class="muted mb-4">{{[ 'google-picker','calendar' ].includes(api.type)?'Verwende einen OAuth-Client vom Typ „Desktop-App“. Lege die JSON als config/client_secret_picker.json ab. Die Google-Anmeldung muss im Browser auf dem Rechner der Bilderwand erfolgen.':'Verwende einen OAuth-Client vom Typ „TVs und Geräte mit begrenzter Eingabe“.'}} Die jeweilige API muss in Google Cloud aktiviert sein.</p>
 		<v-text-field v-model="clientId" autocomplete="off" label="Google Client-ID"/><v-text-field v-model="clientSecret"
 			autocomplete="off"
 			label="Client-Secret"

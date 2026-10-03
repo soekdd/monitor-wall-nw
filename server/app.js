@@ -122,14 +122,14 @@ export async function createWallServer( {
 		await connections.saveSecrets( req.params.id, req.body );lastPoll.clear();res.json( { ok: true } );broadcast();void refresh();
 	} );
 	app.post( "/api/apis/:id/credentials/file", async( req, res ) => {
-		const client = connections.client( req.params.id );await client.loadCredentials( googleCredentialsDirectory, connections.definition( req.params.id ).type === "google-picker" ? googlePickerCredentialsFile : googleCredentialsFile );
+		const client = connections.client( req.params.id );await client.loadCredentials( googleCredentialsDirectory, [ "google-picker", "calendar" ].includes( connections.definition( req.params.id ).type ) ? googlePickerCredentialsFile : googleCredentialsFile );
 
 		if ( client.configurationError ) {
 			throw Object.assign( new Error( client.configurationError ), { status: 400 } );
 		}
 
 		if ( !client.status().configured ) {
-			throw Object.assign( new Error( "Keine passende OAuth-Datei gefunden. Für Picker bitte einen Desktop-Client als config/client_secret_picker.json ablegen." ), { status: 400 } );
+			throw Object.assign( new Error( "Keine passende OAuth-Datei gefunden. Für Picker und Kalender bitte einen Desktop-Client als config/client_secret_picker.json ablegen." ), { status: 400 } );
 		}
 
 		res.json( client.status() );broadcast();
@@ -144,7 +144,7 @@ export async function createWallServer( {
 		}
 
 		try {
-			await client.completeLogin( req.query );broadcast();res.type( "html" ).send( "<h1>Google Photos verbunden</h1><p>Du kannst dieses Fenster schließen und zur Bilderwand zurückkehren.</p>" );
+			await client.completeLogin( req.query );broadcast();res.type( "html" ).send( "<h1>Google verbunden</h1><p>Du kannst dieses Fenster schließen und zur Bilderwand zurückkehren.</p>" );
 		} catch {
 			broadcast();res.status( 400 ).type( "html" )
 				.send( "<h1>Google-Anmeldung fehlgeschlagen</h1><p>Die Einzelheiten stehen unter API-Einstellungen. Bitte dort erneut anmelden.</p>" );

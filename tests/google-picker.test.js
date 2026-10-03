@@ -167,7 +167,7 @@ test( "authenticated Picker API imports and renders durable files without exposi
 	assert.equal( ( await fetch( base + "/api/google-picker/scenes/picked/session", { method: "POST" } ) ).status, 401 );
 	const login = await( await req( "/api/apis/google-picker/login" ) ).json();const parameters = new URL( login.authorizationUrl ).searchParams;assert.equal( parameters.get( "redirect_uri" ), `${base}/oauth/google/callback` );
 	assert.equal( ( await fetch( `${base}/oauth/google/callback?state=wrong&code=fake` ) ).status, 400 );
-	const callback = await fetch( `${base}/oauth/google/callback?state=${encodeURIComponent( parameters.get( "state" ) )}&code=fake` );assert.equal( callback.status, 200 );assert.match( callback.headers.get( "cache-control" ), /no-store/ );assert.match( await callback.text(), /Google Photos verbunden/ );
+	const callback = await fetch( `${base}/oauth/google/callback?state=${encodeURIComponent( parameters.get( "state" ) )}&code=fake` );assert.equal( callback.status, 200 );assert.match( callback.headers.get( "cache-control" ), /no-store/ );assert.match( await callback.text(), /Google verbunden/ );
 	assert.equal( ( await fetch( `${base}/oauth/google/callback?state=${encodeURIComponent( parameters.get( "state" ) )}&code=fake` ) ).status, 400 );
 	assert.equal( ( await req( "/api/google-picker/scenes/picked/session" ) ).status, 200 );google.selected = true;google.now += 5001;
 	assert.equal( ( await( await req( "/api/google-picker/scenes/picked/poll" ) ).json() ).status, "ready" );assert.equal( ( await req( "/api/google-picker/scenes/picked/import" ) ).status, 200 );

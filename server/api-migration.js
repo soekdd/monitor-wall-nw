@@ -89,5 +89,24 @@ export function migrateApis( input, inputSecrets ) {
 		delete secrets[ widget.id ];
 	}
 
+	for ( const api of config.apis.filter( api => api.type === "calendar" ) ) {
+		const credentials = { ...secrets.apis[ api.id ] }, picker = config.apis.find( item => item.type === "google-picker" );
+
+		if ( !credentials.refreshToken && api.options?.refresh_token ) {
+			credentials.refreshToken = api.options.refresh_token;
+		}
+
+		if ( picker ) {
+			credentials.clientId ||= secrets.apis[ picker.id ]?.clientId;
+			credentials.clientSecret ||= secrets.apis[ picker.id ]?.clientSecret;
+		}
+
+		for ( const key of [ "access_token", "refresh_token", "token_type", "expiry_date" ] ) {
+			delete api.options[ key ];
+		}
+
+		secrets.apis[ api.id ] = credentials;
+	}
+
 	return { config, secrets };
 }

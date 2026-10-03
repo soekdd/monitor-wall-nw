@@ -6,7 +6,7 @@ export const apiTypes = [
 		value: "google-picker", title: "Google Photos Picker API", help: "Fotos manuell auswählen und lokal importieren. Google Photos Picker API im Cloud-Projekt aktivieren. OAuth-Client: Desktop-App. Die Anmeldung im Browser auf dem Rechner der Bilderwand abschließen. Neue Albumfotos werden nicht automatisch übernommen.", options: {}, google: true, scope: "https://www.googleapis.com/auth/photospicker.mediaitems.readonly"
 	},
 	{
-		value: "calendar", title: "Google Calendar API", help: "calendarId, days. Einen Refresh-Token mit Calendar-Leseberechtigung unter Zugangsdaten hinterlegen.", options: { calendarId: "primary", days: 7 }
+		value: "calendar", title: "Google Calendar API", help: "calendarId, days. OAuth-Client: Desktop-App; Anmeldung im Browser mit Calendar-Leseberechtigung.", options: { calendarId: "primary", days: 7 }, google: true, scope: "https://www.googleapis.com/auth/calendar.readonly"
 	},
 	{
 		value: "weather", title: "Wetter · Open-Meteo", help: "latitude, longitude: Koordinaten. Keine Zugangsdaten erforderlich.", options: { latitude: 51.05, longitude: 13.74 }
@@ -14,9 +14,9 @@ export const apiTypes = [
 	{
 		value:   "transit",
 		title:   "Bus & Bahn · VVO",
-		help:    "stop: Haltestelle, minMinutes: Mindestvorlauf, exclude: Ziele ausschließen, limit: Anzahl.",
+		help:    "Kostenlose VVO-WebAPI mit Echtzeitdaten. stops: Haltestellenliste als [{\"name\":\"...\",\"id\":\"...\"}]. Alternativ weiterhin stop und stopId. destinationBlacklist: Endstationen ausblenden, minMinutes: Mindestvorlauf, limit: Anzahl je Haltestelle.",
 		options: {
-			stop: "", minMinutes: 8, exclude: [], limit: 4
+			stops: [], minMinutes: 8, destinationBlacklist: [], limit: 4
 		}
 	},
 	{

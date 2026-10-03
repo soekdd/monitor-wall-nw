@@ -1,5 +1,6 @@
 import { GooglePhotos } from "./google-photos.js";
 import { GooglePicker } from "./google-picker.js";
+import { GoogleBrowserOAuth } from "./google-browser-oauth.js";
 import { apiTypes } from "../shared/api-types.js";
 
 export function apiStore( store, id ) {
@@ -41,8 +42,10 @@ export class ApiConnections {
 					apiStore( this.store, id ), this.store, {
 						...this.options, scope: type.scope, onImport: this.onImport
 					}
-				) :
-				new GooglePhotos( apiStore( this.store, id ), { ...this.options, scope: type.scope } ) );
+				) : api.type === "calendar" ? new GoogleBrowserOAuth( apiStore( this.store, id ), {
+					...this.options, scope: type.scope, serviceName: "Google Calendar"
+				} ) :
+					new GooglePhotos( apiStore( this.store, id ), { ...this.options, scope: type.scope } ) );
 		}
 
 		return this.clients.get( id );

@@ -26,7 +26,7 @@ Beim ersten Start wird im Datenverzeichnis eine `config.json` mit dem initialen 
 
 ```sh
 npm run build
-npm start                  # Electron mit gebautem Frontend
+npm start                  # Electron im Hintergrund mit gebautem Frontend
 npm run start:web          # Gebautes Frontend ohne Electron
 npm run dist               # Installer für das aktuelle Betriebssystem
 npm run lint               # JavaScript und Vue prüfen
@@ -37,7 +37,7 @@ npm run test:electron      # UI-Smoke-Test in der Electron-Laufzeit
 
 ## Anwendung beenden
 
-`npm run stop` sendet der laufenden Electron-Anwendung ein `SIGTERM`. Electron führt daraufhin seinen normalen Beenden-Pfad aus, schließt den Backend-Dienst und entfernt die PID-Datei. Falls keine Instanz läuft, beendet sich der Befehl ohne Fehler. Dateien, Einstellungen und Nutzerdaten werden dabei nicht gelöscht.
+`npm start` startet Electron als Hintergrundprozess und gibt die aufrufende Konsole sofort wieder frei. `npm run stop` sendet der laufenden Electron-Anwendung ein `SIGTERM`. Electron führt daraufhin seinen normalen Beenden-Pfad aus, schließt den Backend-Dienst und entfernt die PID-Datei. Falls keine Instanz läuft, beendet sich der Befehl ohne Fehler. Dateien, Einstellungen und Nutzerdaten werden dabei nicht gelöscht.
 
 ESLint prüft die aktuelle Anwendung einschließlich Server, Electron und Tests. `old/`, lokale Daten und Zugangsdaten sowie generierte Dateien sind ausgeschlossen. Die Formatregeln verwenden Tabs und doppelte Anführungszeichen; `npm run lint -- --fix` funktioniert ebenfalls. Nicht automatisch korrigierbare Probleme müssen anhand der ESLint-Meldungen behoben werden.
 
@@ -79,7 +79,7 @@ Beispiel: Während Halloween werden Szenen mit ausschließlich „Herbst“ nich
 | Bus/Bahn | VVO-Abfahrtsmonitor: `stop`, `minMinutes`, `exclude`, `limit` |
 | Vertretungsplan | `url` eines JSON-Endpunkts oder einer Stundenplan24-XML-Datei und optional `class` als einzelne Klasse oder Liste, z. B. `class: ["5a","7b"]`; alternativ `rows` mit Texten oder `{date,class,lesson,subject,text}`. Bei konfigurierten Klassen wird jede Klasse mit allen Treffern in einer Zeile zusammengefasst. Für geschützte Pläne `username` und `password` separat unter Zugangsdaten eintragen. |
 | MPD | `host`, `port`; optional `password` unter Zugangsdaten |
-| Google Kalender | `calendarId`, `days`; `clientId`, `clientSecret`, `refreshToken` unter Zugangsdaten. OAuth-Anmeldung und Refresh-Token müssen außerhalb dieser App eingerichtet werden, mit Calendar-Leseberechtigung. |
+| Google Kalender | `calendarId`, `days`; OAuth-Client vom Typ Desktop-App. Die Anmeldung mit Calendar-Leseberechtigung erfolgt im Browser über die API-Einstellungen. Der vorhandene Picker-OAuth-Client kann wiederverwendet werden; das Kalender-Token bleibt separat. |
 | Kameras | `cameras: [{"name":"Eingang","url":"http://kamera/snapshot.jpg"}]`; Bild/MJPEG-Proxy im Backend. Optional `authorization` unter Zugangsdaten. RTSP wird nicht direkt unterstützt. |
 | Fußball | OpenLigaDB: `league`, `season` (Saisonstartjahr), optional `team` als Namensfilter |
 

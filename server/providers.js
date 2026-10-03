@@ -50,6 +50,79 @@ export function parseSchoolXml( xml ) {
 	} ) );
 }
 
+export function calendarLines( items, limit = 12 ) {
+	return items
+		.filter( event => !String( event.summary || "" ).trimStart()
+			.startsWith( "//" ) )
+		.slice( 0, limit )
+		.map( event => `${new Date( event.start.dateTime || event.start.date ).toLocaleDateString( "de-DE", {
+			weekday: "short", day: "2-digit", month: "2-digit"
+		} )} ${event.start.dateTime ? new Date( event.start.dateTime ).toLocaleTimeString( "de-DE", { hour: "2-digit", minute: "2-digit" } ) : "Ganztägig"}  ${event.summary || ""}` );
+}
+
+const vvoTime = value => {
+	const match = String( value || "" ).match( /\/Date\((\d+)/ );
+
+	return match ? Number( match[ 1 ] ) : Date.parse( value );
+};
+
+export function transitLines(
+	departures, options = {}, now = Date.now()
+) {
+	const normalizedDestination = destination => String( destination || "" ).trim()
+		.toLocaleLowerCase( "de-DE" );const blacklist = new Set( [
+		...Array.isArray( options.destinationBlacklist ) ? options.destinationBlacklist : [],
+		...Array.isArray( options.exclude ) ? options.exclude : []
+	].map( normalizedDestination ).filter( Boolean ) );const minimum = Number( options.minMinutes ) || 0;const limit = Number( options.limit ) || 4;
+
+	return departures
+		.filter( departure => !departure.CancelReasons?.length && !blacklist.has( normalizedDestination( departure.Direction ) ) )
+		.map( departure => ( {
+			...departure,
+			minutes: Math.ceil( ( vvoTime( departure.RealTime || departure.ScheduledTime ) - now ) / 60000 )
+		} ) )
+		.filter( departure => Number.isFinite( departure.minutes ) && departure.minutes >= minimum )
+		.slice( 0, limit )
+		.map( departure => `${departure.LineName}  ${departure.Direction}  ·  ${departure.minutes} min` );
+}
+
+const configuredTransitStops = options => {
+	const stops = Array.isArray( options.stops ) && options.stops.length ? options.stops : [ { name: options.stop, id: options.stopId } ];
+
+	return stops.map( stop => typeof stop === "string" ? { name: stop, id: "" } : {
+		name: String( stop.name || stop.stop || "" ).trim(),
+		id:   String( stop.id || stop.stopId || "" ).trim()
+	} ).filter( stop => stop.name || stop.id );
+};
+
+async function fetchVvoDepartures( stop, options ) {
+	let stopId = stop.id;
+
+	if ( !stopId ) {
+		const params = new URLSearchParams( {
+			query: stop.name, limit: "5", stopsOnly: "true", regionalOnly: "true", format: "json"
+		} );const points = await fetchJson( `https://webapi.vvo-online.de/tr/pointfinder?${params}` );stopId = String( points.Points?.[ 0 ] || "" ).split( "|" )[ 0 ];
+	}
+
+	if ( !stopId ) {
+		throw new Error( `VVO-Haltestelle nicht gefunden: ${stop.name || "keine Angabe"}` );
+	}
+
+	const requested = Math.min( 50, Math.max( 12, ( Number( options.limit ) || 4 ) * 4 ) );const data = await fetchJson( "https://webapi.vvo-online.de/dm", {
+		method:  "POST",
+		headers: { "Content-Type": "application/json;charset=UTF-8" },
+		body:    JSON.stringify( {
+			stopid: stopId, limit: requested, shorttermchanges: true, format: "json"
+		} )
+	} );
+
+	if ( data.Status?.Code !== "Ok" || !Array.isArray( data.Departures ) ) {
+		throw new Error( `VVO-Abfahrten konnten nicht geladen werden${data.Status?.Message ? `: ${data.Status.Message}` : ""}` );
+	}
+
+	return { name: data.Name || stop.name || stopId, departures: data.Departures };
+}
+
 async function fetchSchoolRows( url, secrets ) {
 	const u = new URL( url );
 
@@ -131,10 +204,13 @@ export async function loadWidget(
 	switch ( w.type ) {
 		case "weather": {const d = await fetchJson( `https://api.open-meteo.com/v1/forecast?latitude=${Number( o.latitude ) || 51.05}&longitude=${Number( o.longitude ) || 13.74}&current=temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=3` );return { lines: [ `${Math.round( d.current.temperature_2m )} °C`, ...d.daily.time.map( ( day, i ) => `${new Date( day ).toLocaleDateString( "de-DE", { weekday: "short" } )}  ${Math.round( d.daily.temperature_2m_min[ i ] )}° / ${Math.round( d.daily.temperature_2m_max[ i ] )}°` ) ] };}
 
-		case "transit": {const d = await fetchJson( `https://widgets.vvo-online.de/abfahrtsmonitor/Abfahrten.do?hst=${encodeURIComponent( o.stop || "" )}` );return {
-			lines: d.filter( r => Number( r[ 2 ] ) >= Number( o.minMinutes || 0 ) && !( o.exclude || [] ).includes( r[ 1 ] ) ).slice( 0, Number( o.limit ) || 4 )
-				.map( r => `${r[ 0 ]}  ${r[ 1 ]}  ·  ${r[ 2 ]} min` )
-		};}
+		case "transit": {const stops = configuredTransitStops( o );
+
+			if ( !stops.length ) {
+				throw new Error( "Keine VVO-Haltestelle konfiguriert" );
+			}
+
+			const results = await Promise.all( stops.map( stop => fetchVvoDepartures( stop, o ) ) );return { lines: results.flatMap( result => transitLines( result.departures, o ) ) };}
 
 		case "school": {const rows = o.url ? await fetchSchoolRows( o.url, s ) : o.rows;
 
@@ -177,12 +253,8 @@ export async function loadWidget(
 				client_id: s.clientId, client_secret: s.clientSecret, refresh_token: s.refreshToken, grant_type: "refresh_token"
 			} )
 		} );const params = new URLSearchParams( {
-			timeMin: new Date().toISOString(), timeMax: new Date( Date.now() + ( Number( o.days ) || 7 ) * 86400000 ).toISOString(), singleEvents: "true", orderBy: "startTime", maxResults: "12"
-		} );const d = await fetchJson( `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent( o.calendarId || "primary" )}/events?${params}`, { headers: { Authorization: `Bearer ${token.access_token}` } } );return {
-			lines: d.items.map( e => `${new Date( e.start.dateTime || e.start.date ).toLocaleDateString( "de-DE", {
-				weekday: "short", day: "2-digit", month: "2-digit"
-			} )} ${e.start.dateTime ? new Date( e.start.dateTime ).toLocaleTimeString( "de-DE", { hour: "2-digit", minute: "2-digit" } ) : "Ganztägig"}  ${e.summary}` )
-		};}
+			timeMin: new Date().toISOString(), timeMax: new Date( Date.now() + ( Number( o.days ) || 7 ) * 86400000 ).toISOString(), singleEvents: "true", orderBy: "startTime", maxResults: "50"
+		} );const d = await fetchJson( `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent( o.calendarId || "primary" )}/events?${params}`, { headers: { Authorization: `Bearer ${token.access_token}` } } );return { lines: calendarLines( d.items || [] ) };}
 
 		case "cameras": return { cameras: ( o.cameras || [] ).map( ( c, i ) => ( { name: c.name || `Kamera ${i + 1}`, index: i } ) ) };
 

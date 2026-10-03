@@ -693,6 +693,15 @@ h3 {
     font-size: 36px
 }
 
+.school .widget-line {
+    font-size: 50%
+}
+
+.calendar .widget-line,
+.transit .widget-line {
+    font-size: 75%
+}
+
 .title {
     font-size: 22px
 }
