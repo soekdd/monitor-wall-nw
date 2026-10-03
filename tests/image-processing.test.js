@@ -61,7 +61,7 @@ test( "upload and URL endpoints produce WebP with the requested scene dimensions
 			"files", new Blob( [ bytes ], { type: "image/png" } ), "picture.png"
 		);
 		const response = await fetch( `${base}/api/upload`, {
-			method: "POST", headers: { Authorization: `Bearer ${service.token}` }, body: form
+			method: "POST", headers: { Authorization: `Bearer ${service.password}` }, body: form
 		} );
 		assert.equal( response.status, 200 );
 		const { sources } = await response.json();assert.match( sources[ 0 ], /\.webp$/ );
@@ -80,9 +80,17 @@ test( "upload and URL endpoints produce WebP with the requested scene dimensions
 	);
 	const before = await readdir( path.join( directory, "media" ) );
 	const response = await fetch( `${base}/api/upload`, {
-		method: "POST", headers: { Authorization: `Bearer ${service.token}` }, body: form
+		method: "POST", headers: { Authorization: `Bearer ${service.password}` }, body: form
 	} );
-	assert.equal( response.status, 415 );assert.deepEqual( await readdir( path.join( directory, "media" ) ), before );
+	assert.equal( response.status, 200 );const result = await response.json();assert.equal( result.sources.length, 1 );assert.equal( result.skipped, 1 );assert.equal( ( await readdir( path.join( directory, "media" ) ) ).length, before.length + 1 );
+
+	const broken = new FormData();broken.append(
+		"files", new Blob( [ "not an image" ] ), "broken.jpg"
+	);
+	const rejected = await fetch( `${base}/api/upload`, {
+		method: "POST", headers: { Authorization: `Bearer ${service.password}` }, body: broken
+	} );
+	assert.equal( rejected.status, 415 );assert.equal( ( await readdir( path.join( directory, "media" ) ) ).length, before.length + 1 );
 } );
 
 

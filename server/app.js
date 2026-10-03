@@ -1,9 +1,7 @@
 import express from "express";
 import multer from "multer";
 import path from "node:path";
-import {
-	randomBytes, timingSafeEqual, randomUUID
-} from "node:crypto";
+import { timingSafeEqual, randomUUID } from "node:crypto";
 import {
 	rename, rm, writeFile
 } from "node:fs/promises";
@@ -19,12 +17,7 @@ export async function createWallServer( {
 	directory, port = 3210, host = "0.0.0.0", frontend, dist, displays = () => [], onDisplays = () => {}, photosOptions = {}, googleCredentialsDirectory, googleCredentialsFile, googlePickerCredentialsFile
 } ) {
 	const store = await new JsonStore( directory ).init();
-
-	if ( !store.secrets.adminToken ) {
-		await store.saveSecrets( { ...store.secrets, adminToken: randomBytes( 24 ).toString( "hex" ) } );
-	}
-
-	const token = store.secrets.adminToken, app = express(), clients = new Set(), results = {}, pending = new Set(), lastPoll = new Map();
+	const password = store.access.password, app = express(), clients = new Set(), results = {}, pending = new Set(), lastPoll = new Map();
 	const connections = new ApiConnections(
 		store, photosOptions, committed => {
 			if ( committed ) {
@@ -47,12 +40,18 @@ export async function createWallServer( {
 	const playbackConfig = () => ( { ...store.config, scenes: store.config.scenes.map( s => s.type === "google-photos" ? { ...s, sources: connections.forScene( s ).sources( s.id ) } : s ) } );
 	let saving = false;
 	let state = {
-		currentId: pickNext( playbackConfig(), null ), paused: false, pausedAt: null, changedAt: Date.now(), revision: 0
+		currentId: pickNext( playbackConfig(), null ), paused: false, pausedAt: null, changedAt: Date.now(), sceneRevision: 0, revision: 0
 	};
 
 	const reconcilePlayback = () => {
 		if ( !playbackConfig().scenes.some( s => s.id === state.currentId && s.enabled && s.sources.length ) ) {
-			state.currentId = pickNext( playbackConfig(), null );state.changedAt = Date.now();
+			const next = pickNext( playbackConfig(), null );
+
+			if ( next !== state.currentId ) {
+				state.sceneRevision++;
+			}
+
+			state.currentId = next;state.changedAt = Date.now();
 
 			if ( state.paused ) {
 				state.pausedAt = state.changedAt;
@@ -76,7 +75,7 @@ export async function createWallServer( {
 	};
 
 	const authorized = req => {
-		const candidate = String( req.headers.authorization?.replace( /^Bearer /, "" ) || req.query.token || "" );return Buffer.byteLength( candidate ) === Buffer.byteLength( token ) && timingSafeEqual( Buffer.from( candidate ), Buffer.from( token ) );
+		const candidate = String( req.headers.authorization?.replace( /^Bearer /, "" ) || req.query.password || "" );return Buffer.byteLength( candidate ) === Buffer.byteLength( password ) && timingSafeEqual( Buffer.from( candidate ), Buffer.from( password ) );
 	};
 
 	app.disable( "x-powered-by" );app.use( express.json( { limit: "2mb" } ) );
@@ -89,7 +88,7 @@ export async function createWallServer( {
 			res.setHeader( "Cache-Control", "no-store" );
 
 			if ( !authorized( req ) ) {
-				return res.status( 401 ).json( { error: "Bitte mit dem Zugangscode anmelden." } );
+				return res.status( 401 ).json( { error: "Bitte mit dem Passwort anmelden." } );
 			}
 
 			if ( ![ "GET", "HEAD" ].includes( req.method ) && req.headers.origin && req.headers.origin !== `${req.protocol}://${req.headers.host}` ) {
@@ -212,7 +211,13 @@ export async function createWallServer( {
 			connections.assertConfigChange( req.body.config );await store.update( req.body.config );state.revision++;
 
 			if ( !eligibleScenes( playbackConfig() ).some( s => s.id === state.currentId ) ) {
-				state.currentId = pickNext( playbackConfig(), null );state.changedAt = Date.now();
+				const next = pickNext( playbackConfig(), null );
+
+				if ( next !== state.currentId ) {
+					state.sceneRevision++;
+				}
+
+				state.currentId = next;state.changedAt = Date.now();
 			}
 
 			lastPoll.clear();await onDisplays( store.config );broadcast();res.json( snapshot() );void refresh();
@@ -234,7 +239,7 @@ export async function createWallServer( {
 		} else if ( action === "next" || action === "previous" ) {
 			state.currentId = pickNext(
 				playbackConfig(), state.currentId, action === "previous" ? -1 : 1
-			);state.changedAt = Date.now();
+			);state.changedAt = Date.now();state.sceneRevision++;
 
 			if ( state.paused ) {
 				state.pausedAt = state.changedAt;
@@ -244,7 +249,7 @@ export async function createWallServer( {
 				return res.status( 400 ).json( { error: "Szene ist nicht verfügbar" } );
 			}
 
-			state.currentId = id;state.changedAt = Date.now();
+			state.currentId = id;state.changedAt = Date.now();state.sceneRevision++;
 
 			if ( state.paused ) {
 				state.pausedAt = state.changedAt;
@@ -284,7 +289,7 @@ export async function createWallServer( {
 				return res.status( 400 ).json( { error: "Keine unterstützten Dateien ausgewählt" } );
 			}
 
-			const completed = [];
+			const completed = [];let skipped = 0, result;
 
 			try {
 				for ( const file of req.files ) {
@@ -293,24 +298,39 @@ export async function createWallServer( {
 					const target = path.join(
 						directory, "media", name
 					);
-					completed.push( target );
 
 					if ( html ) {
 						await rename( file.path, target );
 					} else {
+						let converted;
+
+						try {
+							converted = await webpImage( file.path, req.body.type || "fit" );
+						} catch {
+							skipped++;continue;
+						}
+
 						await writeFile(
-							target, await webpImage( file.path, req.body.type || "fit" ), { flag: "wx" }
+							target, converted, { flag: "wx" }
 						);
 					}
+
+					completed.push( target );
 				}
 
-				res.json( { sources: completed.map( f => `/media/${path.basename( f )}` ) } );
+				if ( !completed.length ) {
+					throw Object.assign( new Error( "Keine der ausgewählten Bilddateien konnte verarbeitet werden." ), { status: 415 } );
+				}
+
+				result = { sources: completed.map( f => `/media/${path.basename( f )}` ), skipped };
 			} catch( error ) {
 				await Promise.all( completed.map( f => rm( f, { force: true } ) ) );
-				throw Object.assign( new Error( "Die Bilddateien konnten nicht verarbeitet werden. Bitte gültige Bilder auswählen." ), { status: 415 } );
+				throw error.status ? error : Object.assign( new Error( "Die Bilddateien konnten nicht verarbeitet werden. Bitte gültige Bilder auswählen." ), { status: 415 } );
 			} finally {
 				await Promise.all( req.files.map( f => rm( f.path, { force: true } ) ) );
 			}
+
+			res.json( result );
 		}
 	);
 	app.post( "/api/import-image", async( req, res ) => {
@@ -433,7 +453,7 @@ export async function createWallServer( {
 	} );void refresh();
 	const ticker = setInterval( () => {
 		if ( !state.paused && Date.now() - state.changedAt >= store.config.intervalSeconds * 1000 ) {
-			state.currentId = pickNext( playbackConfig(), state.currentId );state.changedAt = Date.now();broadcast();
+			state.currentId = pickNext( playbackConfig(), state.currentId );state.changedAt = Date.now();state.sceneRevision++;broadcast();
 		}
 
 		void refresh();
@@ -450,7 +470,7 @@ export async function createWallServer( {
 		photos,
 		connections,
 		server,
-		token,
+		password,
 		snapshot,
 		broadcast,
 		async close() {

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-	stackImageSize, stackLayout, stackPictures
+	advancePictureStack, createPictureStack, distributePictures, initialStackSize, shufflePictures, stackCardLayout, stackImageSize
 } from "../shared/stack-layout.js";
 
 const close = ( actual, expected ) => assert.ok( Math.abs( actual - expected ) < 0.000001, `${actual} != ${expected}` );
@@ -18,29 +18,86 @@ test( "each picture preserves its ratio and occupies at most 30% including its f
 	}
 } );
 
-test( "adding and removing pictures leaves retained cards unchanged across source cycles", () => {
+test( "a selection is shuffled reproducibly without duplicates", () => {
+	const sources = Array.from( { length: 40 }, ( _, index ) => `image-${index}` );
+	const first = shufflePictures( [ ...sources, sources[ 0 ] ], "selection-1" );
+	assert.equal( first.length, sources.length );assert.deepEqual( new Set( first ), new Set( sources ) );assert.deepEqual( shufflePictures( sources, "selection-1" ), first );assert.notDeepEqual( shufflePictures( sources, "selection-2" ), first );
+} );
+
+test( "stacks start with ten shuffled pictures and grow until every picture is present", () => {
+	const sources = Array.from( { length: 81 }, ( _, index ) => `image-${index}` );
+	const distributed = distributePictures( sources, 4 );
+	const first = createPictureStack( distributed[ 0 ], 0 ), second = createPictureStack( distributed[ 1 ], 1 );
+	assert.equal( initialStackSize, 10 );assert.equal( first.cards.length, 10 );assert.equal( second.cards.length, 10 );assert.equal( distributed.flat().length, sources.length );assert.equal( new Set( distributed.flat() ).size, sources.length );
+	let growing = first;
+
+	for ( let index = 0; index < 100; index++ ) {
+		growing = advancePictureStack( growing );
+	}
+
+	assert.equal( growing.cards.length, distributed[ 0 ].length );assert.equal( new Set( growing.cards.map( card => card.source ) ).size, distributed[ 0 ].length );
+} );
+
+test( "pictures belong to exactly one monitor stack, including after repeated cycles", () => {
+	const sources = Array.from( { length: 37 }, ( _, index ) => `image-${index}` );
+	const distributed = distributePictures( sources, 4 );let stacks = distributed.map( ( pictures, index ) => createPictureStack(
+		pictures, index, "selection"
+	) );
+
+	for ( let step = 0; step < 100; step++ ) {
+		const visible = stacks.flatMap( stack => stack.cards.map( card => card.source ) );assert.equal( new Set( visible ).size, visible.length );stacks = stacks.map( advancePictureStack );
+	}
+
+	assert.deepEqual( distributePictures( [ "one", "two" ], 4 ).map( pictures => pictures.length ), [ 1, 1, 0, 0 ] );
+} );
+
+test( "the first ten cards use random positions centered on every monitor", () => {
+	const sources = Array.from( { length: 30 }, ( _, index ) => `image-${index}` );
+
+	for ( const monitorIndex of [ 0, 1, 2, 3 ] ) {
+		const cards = createPictureStack(
+			sources, monitorIndex, "selection"
+		).cards;
+		close( cards.reduce( ( sum, card ) => sum + card.x, 0 ) / cards.length, 0.5 );close( cards.reduce( ( sum, card ) => sum + card.y, 0 ) / cards.length, 0.5 );assert.equal( new Set( cards.map( card => `${card.x}:${card.y}` ) ).size, cards.length );
+	}
+
+	assert.notDeepEqual( createPictureStack(
+		sources, 0, "selection-a"
+	).cards.map( card => [ card.x, card.y ] ), createPictureStack(
+		sources, 0, "selection-b"
+	).cards.map( card => [ card.x, card.y ] ) );
+} );
+
+test( "completed source lists cycle from the beginning by moving an existing picture to the top", () => {
+	const sources = Array.from( { length: 12 }, ( _, index ) => `image-${index}` );
+	let stack = createPictureStack( sources );stack = advancePictureStack( stack );stack = advancePictureStack( stack );
+	assert.deepEqual( stack.cards.map( card => card.source ), sources );stack = advancePictureStack( stack );
+	assert.deepEqual( stack.cards.map( card => card.source ), [ ...sources.slice( 1 ), sources[ 0 ] ] );stack = advancePictureStack( stack );
+	assert.deepEqual( stack.cards.map( card => card.source ), [ ...sources.slice( 2 ), sources[ 0 ], sources[ 1 ] ] );
+	assert.deepEqual( createPictureStack( sources.slice( 0, 3 ) ).cards.map( card => card.source ), sources.slice( 0, 3 ) );
+} );
+
+test( "adding and recycling pictures leaves retained cards in place", () => {
 	const monitors = [ { width: 1920, height: 1080 }, { width: 1080, height: 1920 }, { width: 2560, height: 1440 } ];
 
 	for ( const [ monitorIndex, monitor ] of monitors.entries() ) {
 		for ( const count of [ 1, 3, 7, 11, 25, 31 ] ) {
 			const sources = Array.from( { length: count }, ( _, index ) => `image-${index}` );
 			const dimensions = new Map( sources.map( ( source, index ) => [ source, images[ index % images.length ] ] ) );
-
-			const cardsAt = step => {
-				const pictures = stackPictures(
-					sources, step, monitorIndex
-				);
-				return stackLayout(
-					monitor, monitorIndex, pictures.map( source => dimensions.get( source ) ), step
-				).map( ( card, index ) => ( { ...card, source: pictures[ index ] } ) );
-			};
+			let stack = createPictureStack( sources, monitorIndex );
+			const layout = state => state.cards.map( card => ( {
+				...stackCardLayout(
+					monitor, dimensions.get( card.source ), card
+				),
+				source: card.source
+			} ) );
 
 			for ( let step = 0; step < count * 3; step++ ) {
-				const previous = cardsAt( step ), next = cardsAt( step + 1 );
-				assert.deepEqual( next.slice( 0, -1 ), previous.slice( 1 ) );
+				const previous = layout( stack );stack = advancePictureStack( stack );const next = layout( stack );
+				const retained = previous.filter( card => card.source !== next.at( -1 ).source );
+				assert.deepEqual( next.slice( 0, -1 ), retained );
 				assert.ok( next.at( -1 ).zIndex > previous.at( -1 ).zIndex );
-				assert.equal( new Set( next.map( card => card.zIndex ) ).size, 25 );
-				assert.equal( next.at( -1 ).source, sources[ ( step + 26 + monitorIndex * 25 ) % count ] );
+				assert.equal( new Set( next.map( card => card.source ) ).size, next.length );
 			}
 		}
 	}
@@ -48,27 +105,17 @@ test( "adding and removing pictures leaves retained cards unchanged across sourc
 
 test( "adding a picture or learning its dimensions does not reposition other pictures", () => {
 	const monitor = { width: 1920, height: 1080 };
-	const previous = stackLayout(
-		monitor, 0, images.slice( 0, 6 )
-	);
-	const pending = stackLayout(
-		monitor, 0, [ ...images.slice( 0, 6 ), undefined ]
-	);
-	const loaded = stackLayout(
-		monitor, 0, images
-	);
-	assert.deepEqual( pending.slice( 0, 6 ), previous );
-	assert.deepEqual( loaded.slice( 0, 6 ), previous );
-	assert.equal( pending[ 6 ].x, loaded[ 6 ].x );
-	assert.equal( pending[ 6 ].y, loaded[ 6 ].y );
-	assert.equal( pending[ 6 ].rotation, loaded[ 6 ].rotation );
+	const card = createPictureStack(
+		[ "picture" ], 0, "selection"
+	).cards[ 0 ];
+	const pending = stackCardLayout(
+								monitor, undefined, card
+							), loaded = stackCardLayout(
+								monitor, images[ 0 ], card
+							);
+	assert.equal( pending.x, loaded.x );assert.equal( pending.y, loaded.y );assert.equal( pending.rotation, loaded.rotation );
 } );
 
 test( "empty stacks have no cards", () => {
-	assert.deepEqual( stackPictures(
-		[], 0, 0
-	), [] );
-	assert.deepEqual( stackLayout(
-		{ width: 1920, height: 1080 }, 0, []
-	), [] );
+	assert.deepEqual( createPictureStack( [] ).cards, [] );assert.deepEqual( advancePictureStack( createPictureStack( [] ) ).cards, [] );
 } );

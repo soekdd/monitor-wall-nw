@@ -8,7 +8,7 @@ import {
 import Admin from "./components/Admin.vue";
 import WallCanvas from "./components/WallCanvas.vue";
 const isWall = ref( location.pathname === "/wall" ), monitor = ref( new URLSearchParams( location.search ).get( "monitor" ) );
-const token = ref( "" ), loading = ref( false ), loginError = ref( "" ), menu = ref( false );
+const password = ref( "" ), loading = ref( false ), loginError = ref( "" ), menu = ref( false );
 const navigating = ref( false );
 const painted = () => new Promise( resolve => requestAnimationFrame( () => requestAnimationFrame( resolve ) ) );
 
@@ -64,7 +64,7 @@ async function login() {
 	loading.value = true;loginError.value = "";
 
 	try {
-		await connect( token.value || undefined );
+		await connect( password.value || undefined );
 	} catch( e ) {
 		loginError.value = e.message;
 	} finally {
@@ -86,10 +86,10 @@ onMounted( async() => {
 </script>
 <template>
 <v-app :aria-busy="navigating">
-	<div v-if="!wall.authenticated" class="login-shell"><v-card class="login-card" width="440"><div class="brand-mark"><v-icon icon="mdi-view-dashboard-outline"/></div><div class="eyebrow mt-8">MONITOR WALL</div><h1 class="mt-3">Ein Zuhause für<br>deine Augenblicke.</h1><p class="muted mt-4 mb-7">Verbinde dich mit deiner Bilderwand. Den Zugangscode findest du in der lokalen Verwaltung oder beim Start im Terminal.</p><form @submit.prevent="login"><v-text-field v-model="token"
+	<div v-if="!wall.authenticated" class="login-shell"><v-card class="login-card" width="440"><div class="brand-mark"><v-icon icon="mdi-view-dashboard-outline"/></div><div class="eyebrow mt-8">MONITOR WALL</div><h1 class="mt-3">Ein Zuhause für<br>deine Augenblicke.</h1><p class="muted mt-4 mb-7">Melde dich mit dem Passwort deiner Bilderwand an.</p><form @submit.prevent="login"><v-text-field v-model="password"
 		autocomplete="current-password"
 		:error-messages="loginError"
-		label="Zugangscode"
+		label="Passwort"
 		type="password"
 	/><v-btn block
 		color="primary"

@@ -3,16 +3,18 @@ import {
 	computed, onMounted, onUnmounted, ref, watch
 } from "vue";
 import {
-	wall, mediaUrl, getToken, sceneSources
+	wall, mediaUrl, getPassword, sceneSources
 } from "../api";
-import { stackLayout, stackPictures } from "../../shared/stack-layout.js";
+import {
+	advancePictureStack, createPictureStack, distributePictures, shufflePictures, stackCardLayout
+} from "../../shared/stack-layout.js";
 const imageDimensions = ref( new Map() );
 const props = defineProps( { monitor: String, preview: Boolean } );
-const root = ref(), size = ref( { width: 1200, height: 400 } ), now = ref( Date.now() );let observer, timer;
+const root = ref(), size = ref( { width: 1200, height: 400 } ), now = ref( Date.now() ), pictureStacks = ref( new Map() );let observer, timer, activeStackKey = "", stackRemaining = 12000, lastTick = Date.now();
 onMounted( () => {
 	observer = new ResizeObserver( entries => {
 		size.value = { width: entries[ 0 ].contentRect.width, height: entries[ 0 ].contentRect.height };
-	} );observer.observe( root.value );timer = setInterval( () => now.value = Date.now(), 1000 );
+	} );observer.observe( root.value );timer = setInterval( tick, 1000 );
 } );onUnmounted( () => {
 	observer?.disconnect();clearInterval( timer );
 } );
@@ -40,6 +42,25 @@ const sources = computed( () => sceneSources( scene.value ) );
 const elapsed = computed( () => Math.max( 0, ( ( wall.state.pausedAt || now.value ) - wall.state.changedAt ) / 1000 ) );
 const imageStep = computed( () => Math.floor( elapsed.value / 12 ) );
 const imageIndex = computed( () => sources.value.length ? imageStep.value % sources.value.length : 0 );
+const isStackScene = computed( () => [ "stack", "google-photos", "google-picker" ].includes( scene.value?.type ) );
+
+function advanceStacks() {
+	pictureStacks.value = new Map( [ ...pictureStacks.value ].map( ( [ id, stack ] ) => [ id, advancePictureStack( stack ) ] ) );
+}
+
+function tick() {
+	const current = Date.now(), passed = Math.min( current - lastTick, 2000 );lastTick = current;now.value = current;
+
+	if ( !isStackScene.value || wall.state.paused || !pictureStacks.value.size ) {
+		return;
+	}
+
+	stackRemaining -= passed;
+
+	if ( stackRemaining <= 0 ) {
+		advanceStacks();stackRemaining = 12000;
+	}
+}
 
 function monitorStyle( m ) {
 	return {
@@ -68,19 +89,41 @@ function lines( w ) {
 }
 
 const stacks = computed( () => monitors.value.map( ( monitor, monitorIndex ) => {
-	const pictures = stackPictures(
-		sources.value, imageStep.value, monitorIndex
-	);
-	const cards = stackLayout(
-		monitor, monitorIndex, pictures.map( source => imageDimensions.value.get( source ) ), imageStep.value
-	);
+	const stack = pictureStacks.value.get( monitor.id );
 	return {
 		monitor,
-		cards: cards.map( ( card, index ) => ( {
-			...card, source: pictures[ index ], loaded: imageDimensions.value.has( pictures[ index ] )
+		cards: ( stack?.cards || [] ).map( card => ( {
+			...stackCardLayout(
+				monitor, imageDimensions.value.get( card.source ), card
+			),
+			source: card.source,
+			loaded: imageDimensions.value.has( card.source )
 		} ) )
 	};
 } ) );
+
+watch(
+	() => JSON.stringify( [ wall.state.sceneRevision, scene.value?.id, scene.value?.type, isStackScene.value ? sources.value : [], monitors.value.map( monitor => monitor.id ) ] ),
+	key => {
+		if ( key === activeStackKey ) {
+			return;
+		}
+
+		activeStackKey = key;stackRemaining = 12000;lastTick = Date.now();
+
+		if ( !isStackScene.value ) {
+			pictureStacks.value = new Map();return;
+		}
+
+		const seed = `${scene.value.id}:${wall.state.sceneRevision}:${wall.state.changedAt}`;
+		const order = shufflePictures( sources.value, seed );
+		const distributed = distributePictures( order, monitors.value.length );
+		pictureStacks.value = new Map( monitors.value.map( ( monitor, index ) => [ monitor.id, createPictureStack(
+			distributed[ index ], index, seed
+		) ] ) );
+	},
+	{ immediate: true }
+);
 
 watch( () => sources.value.join( "\n" ), () => {
 	const active = new Set( sources.value );
@@ -160,7 +203,7 @@ function stackStyle( card ) {
 					:class="[ w.type ]"
 				>
 					<div v-if="![ 'clock','title' ].includes(w.type)" class="widget-heading">{{w.title}}</div>
-					<template v-if="w.type==='cameras'"><div class="camera-grid"><figure v-for="c in wall.widgets[w.id]?.cameras||[]" :key="c.index"><img :alt="c.name" :src="`/api/camera/${w.id}/${c.index}?token=${getToken()}&t=${wall.widgets[w.id]?.updatedAt||0}`"><figcaption>{{c.name}}</figcaption></figure></div></template>
+					<template v-if="w.type==='cameras'"><div class="camera-grid"><figure v-for="c in wall.widgets[w.id]?.cameras||[]" :key="c.index"><img :alt="c.name" :src="`/api/camera/${w.id}/${c.index}?password=${encodeURIComponent(getPassword())}&t=${wall.widgets[w.id]?.updatedAt||0}`"><figcaption>{{c.name}}</figcaption></figure></div></template>
 					<div v-for="(line,i) in lines(w)" :key="i" class="widget-line">{{line}}</div>
 					<div v-if="wall.widgets[w.id]?.status==='error'" class="widget-error">{{wall.widgets[w.id].error}}</div>
 					<div v-else-if="![ 'clock','title','cameras' ].includes(w.type)&&!lines(w).length" class="widget-muted">{{wall.widgets[w.id]?'Keine Einträge':'Wird geladen …'}}</div>

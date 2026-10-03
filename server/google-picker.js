@@ -33,7 +33,7 @@ export class GooglePicker extends GooglePhotos {
 		const { galleries, ...status } = super.status();return {
 			...status,
 			imports: Object.fromEntries( [ ...this.jobs ].map( ( [ id, job ] ) => [ id, {
-				status: job.status, completed: job.completed, total: job.total, error: job.error
+				status: job.status, completed: job.completed, total: job.total, skipped: job.skipped, error: job.error
 			} ] ) )
 		};
 	}
@@ -310,7 +310,7 @@ export class GooglePicker extends GooglePhotos {
 			}
 
 			const job = {
-				status: "importing", completed: 0, total: 0
+				status: "importing", completed: 0, total: 0, skipped: 0
 			};this.jobs.set( scene.id, job );
 			job.promise = this.importFiles(
 				scene, session, job
@@ -404,7 +404,15 @@ export class GooglePicker extends GooglePhotos {
 					throw fail( "Google hat eine leere Bilddatei geliefert.", 502 );
 				}
 
-				const converted = await webpImage( path.join( staging, `${name}.download` ), "google-picker" );
+				let converted;
+
+				try {
+					converted = await webpImage( path.join( staging, `${name}.download` ), "google-picker" );
+				} catch {
+					await rm( path.join( staging, `${name}.download` ), { force: true } );
+					job.completed++;job.skipped++;this.onImport();continue;
+				}
+
 				this.shutdown.signal.throwIfAborted();
 				await writeFile(
 					path.join( staging, name ), converted, { flag: "wx", mode: 0o600 }
@@ -414,6 +422,10 @@ export class GooglePicker extends GooglePhotos {
 			}
 
 			this.shutdown.signal.throwIfAborted();
+
+			if ( !files.length ) {
+				throw fail( "Keines der ausgewählten Fotos konnte verarbeitet werden. Der bisherige Stapel bleibt erhalten.", 415 );
+			}
 
 			for ( const name of files ) {
 				await rename( path.join( staging, name ), path.join( media, name ) );

@@ -3,7 +3,7 @@ import {
 	ref, computed, watch
 } from "vue";
 import {
-	wall, action, save, request, mediaUrl, getToken, logout, sceneSources, createId
+	wall, action, save, request, mediaUrl, logout, sceneSources, createId
 } from "../api";
 import WallCanvas from "./WallCanvas.vue";
 import GooglePhotosGallery from "./GooglePhotosGallery.vue";
@@ -151,6 +151,10 @@ async function upload( event ) {
 			"/upload", "POST", data
 		);
 
+		if ( response.skipped ) {
+			notice.value = `${response.skipped} beschädigte oder ungültige Bilddatei${response.skipped === 1 ? " wurde" : "en wurden"} übersprungen.`;
+		}
+
 		if ( uploadTarget.value === "editing" ) {
 			editing.value.sources.push( ...response.sources );
 		} else {
@@ -243,14 +247,6 @@ async function saveSettings() {
 	await commit( {
 		...clone( wall.config ), name: settings.value.name, intervalSeconds: Number( settings.value.intervalSeconds ), fadeSeconds: Number( settings.value.fadeSeconds ), brightness: Number( settings.value.brightness ), shuffle: settings.value.shuffle
 	} );
-}
-
-async function copyToken() {
-	try {
-		await navigator.clipboard.writeText( getToken() );notice.value = "Zugangscode kopiert";
-	} catch {
-		wall.error = "Kopieren ist nur in einem sicheren Browserkontext verfügbar.";
-	}
 }
 
 function exportConfig() {
@@ -478,12 +474,7 @@ watch( () => wall.config.scenes.find( s => s.id === editing.value?.id )?.sources
 			:loading="busy"
 			prepend-icon="mdi-check"
 			@click="saveSettings"
-		>Einstellungen speichern</v-btn></v-card><div><v-card class="pa-7 mb-5"><h2>Mobile Fernsteuerung</h2><p class="muted my-4">Öffne diese Adresse auf deinem Smartphone im selben Netzwerk und melde dich mit dem Zugangscode an.</p><div v-for="address in wall.addresses" :key="address" class="address">{{address}}/admin</div><div v-if="!wall.addresses.length" class="muted">Kein Netzwerkinterface gefunden.</div><v-text-field class="mt-6"
-			label="Zugangscode"
-			:model-value="getToken()"
-			readonly
-			type="password"
-		/><v-btn prepend-icon="mdi-content-copy" variant="tonal" @click="copyToken">Code kopieren</v-btn></v-card><v-card class="pa-7"><h2>JSON-Konfiguration</h2><p class="muted my-4">Exportiere Einstellungen und Medienreferenzen als Sicherung. Bilddateien und Zugangsdaten werden separat gespeichert.</p><div class="d-flex ga-3 flex-wrap"><v-btn prepend-icon="mdi-download" variant="tonal" @click="exportConfig">Exportieren</v-btn><v-btn prepend-icon="mdi-upload" tag="label" variant="tonal">Importieren<input accept="application/json"
+		>Einstellungen speichern</v-btn></v-card><div><v-card class="pa-7 mb-5"><h2>Mobile Fernsteuerung</h2><p class="muted my-4">Öffne diese Adresse auf deinem Smartphone im selben Netzwerk und melde dich mit dem Passwort aus <code>config.json</code> an.</p><div v-for="address in wall.addresses" :key="address" class="address">{{address}}/admin</div><div v-if="!wall.addresses.length" class="muted">Kein Netzwerkinterface gefunden.</div></v-card><v-card class="pa-7"><h2>JSON-Konfiguration</h2><p class="muted my-4">Exportiere Einstellungen und Medienreferenzen als Sicherung. Bilddateien und Zugangsdaten werden separat gespeichert.</p><div class="d-flex ga-3 flex-wrap"><v-btn prepend-icon="mdi-download" variant="tonal" @click="exportConfig">Exportieren</v-btn><v-btn prepend-icon="mdi-upload" tag="label" variant="tonal">Importieren<input accept="application/json"
 			hidden
 			type="file"
 			@change="importConfig"

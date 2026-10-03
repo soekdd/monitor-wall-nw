@@ -91,7 +91,12 @@ onUnmounted( () => clearTimeout( timer ) );
 		:loading="busy"
 		@click="importPhotos"
 	>Ausgewählte Fotos importieren</v-btn><v-btn v-if="selection.status!=='importing'" variant="text" @click="cancel">Auswahl abbrechen</v-btn></div>
-	<div v-if="job?.status==='importing'" class="mt-4"><v-progress-linear color="primary" :indeterminate="!job.total" :model-value="job.total?job.completed/job.total*100:0"/><p class="muted mt-2">{{job.completed}} / {{job.total||'…'}} Fotos importiert. Der Import läuft auch nach dem Schließen des Dialogs weiter.</p></div>
+	<div v-if="job?.status==='importing'" class="mt-4"><v-progress-linear color="primary" :indeterminate="!job.total" :model-value="job.total?job.completed/job.total*100:0"/><p class="muted mt-2">{{job.completed}} / {{job.total||'…'}} Fotos verarbeitet. Der Import läuft auch nach dem Schließen des Dialogs weiter.</p><p v-if="job.skipped" class="muted mt-2">{{job.skipped}} beschädigte oder ungültige Fotos wurden übersprungen.</p></div>
+	<v-alert v-if="job?.status==='done'&&job.skipped"
+		class="mt-4"
+		color="warning"
+		variant="tonal"
+	>{{job.skipped}} beschädigte oder ungültige Fotos wurden übersprungen; alle übrigen Fotos wurden importiert.</v-alert>
 	<v-alert v-if="error||job?.error"
 		class="mt-4"
 		color="error"

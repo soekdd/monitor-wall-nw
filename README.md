@@ -22,7 +22,7 @@ npm run dev:web
 # http://localhost:3210/admin
 ```
 
-Der Zugangscode erscheint beim Start im Terminal. In Electron erfolgt die lokale Anmeldung automatisch. Unter **Einstellungen** stehen Netzwerkadressen und Zugangscode für das Smartphone. Im gleichen LAN `http://<Rechner-IP>:3210/admin` aufrufen. Der Zugangscode gilt für Medien und API; er wird nur im Sitzungsspeicher des Browsers gehalten. Die Pulldownsteuerung der Wand liegt oben links und wird beim Berühren, Fokussieren oder Überfahren sichtbar.
+Beim ersten Start wird im Datenverzeichnis eine `config.json` mit dem initialen Passwort `123` angelegt. Das Passwort kann dort bei beendeter Anwendung geändert werden. In Electron erfolgt die lokale Anmeldung automatisch. Unter **Einstellungen** stehen die Netzwerkadressen für das Smartphone. Im gleichen LAN `http://<Rechner-IP>:3210/admin` aufrufen und mit dem Passwort anmelden. Das Passwort gilt für Medien und API und wird im Browser nur im Sitzungsspeicher gehalten. Die Pulldownsteuerung der Wand liegt oben links und wird beim Berühren, Fokussieren oder Überfahren sichtbar.
 
 ```sh
 npm run build
@@ -89,8 +89,9 @@ Alle Dienstoptionen der Tabelle werden unter **API-Einstellungen → Konfigurier
 
 Webmodus: `data/` im Projekt. Electron: `app.getPath('userData')/data`. Mit `WALL_DATA_DIR` lässt sich ein gemeinsamer Speicherort setzen. `WALL_PORT` (Standard 3210) und `WALL_HOST` (Webmodus, Standard `0.0.0.0`) konfigurieren den Server. Desktop- und Webmodus nicht gleichzeitig auf demselben Port starten.
 
+- `config.json`: Passwort für Weboberfläche, Medien und API. Wird beim ersten Start als `{ "password": "123" }` angelegt.
 - `settings.json`: Szenen, Monitorgeometrie, Overlays, Wiedergabeeinstellungen und gemeinsame API-Verbindungen unter `apis`. Szenen und externe Informationsmodule verwenden `apiId` als Verweis.
-- `secrets.json`: generierter Zugangscode und Dienstzugangsdaten unter `apis[apiId]`, nicht Bestandteil des Konfigurationsexports.
+- `secrets.json`: Dienstzugangsdaten unter `apis[apiId]`, nicht Bestandteil des Konfigurationsexports.
 - `media/`: hochgeladene und über den Picker importierte Dateien mit zufälligen Dateinamen.
 
 Keine Datenbank. JSON-Dateien werden über temporäre Dateien und Umbenennen geschrieben; Schreibvorgänge sind serialisiert. Beschädigte Einstellungen lösen einen Startfehler aus und werden nicht durch Defaults überschrieben. Zugangsdaten werden mit Dateimodus 0600 gespeichert, sind jedoch keine verschlüsselte Geheimnisablage. Für vollständige Sicherungen das Datenverzeichnis kopieren; der Export in der Verwaltung enthält nur Einstellungen und Medienreferenzen.

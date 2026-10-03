@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-	mkdtemp, readFile, rm
+	mkdtemp, readFile, rm, writeFile
 } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -19,6 +19,10 @@ async function fixture( t ) {
 
 test( "JSON updates are serialized and survive restart; invalid updates preserve disk", async t => {
 	const dir = await fixture( t ), store = await new JsonStore( dir ).init();const a = { ...store.config, name: "A" }, b = { ...store.config, name: "B" };await Promise.all( [ store.update( a ), store.update( b ) ] );assert.equal( ( await new JsonStore( dir ).init() ).config.name, "B" );assert.throws( () => store.update( { ...b, intervalSeconds: 0 } ) );assert.equal( JSON.parse( await readFile( path.join( dir, "settings.json" ), "utf8" ) ).name, "B" );await store.saveSecrets( { password: "private" } );assert.equal( ( await new JsonStore( dir ).init() ).secrets.password, "private" );
+} );
+test( "access config is created with the initial password and custom passwords are loaded", async t => {
+	const dir = await fixture( t ), store = await new JsonStore( dir ).init();assert.equal( store.access.password, "123" );assert.deepEqual( JSON.parse( await readFile( path.join( dir, "config.json" ), "utf8" ) ), { password: "123" } );
+	await writeFile( path.join( dir, "config.json" ), JSON.stringify( { password: "family" } ) );assert.equal( ( await new JsonStore( dir ).init() ).access.password, "family" );await writeFile( path.join( dir, "config.json" ), JSON.stringify( { password: "" } ) );await assert.rejects( new JsonStore( dir ).init(), /password/ );
 } );
 test( "corrupt settings are reported and never overwritten", async t => {
 	const dir = await fixture( t );const { writeFile } = await import( "node:fs/promises" );await writeFile( path.join( dir, "settings.json" ), "{broken" );await assert.rejects( new JsonStore( dir ).init(), /ungültig/ );assert.equal( await readFile( path.join( dir, "settings.json" ), "utf8" ), "{broken" );
@@ -52,10 +56,12 @@ test( "authenticated API controls, optimistic concurrency, uploads, secrets and 
 	} );t.after( () => service.close() );const base = `http://127.0.0.1:${service.server.address().port}`;const req = (
 		route, method = "GET", body
 	) => fetch( base + route, {
-		method, headers: { Authorization: `Bearer ${service.token}`, ...body ? { "Content-Type": "application/json" } : {} }, body: body ? JSON.stringify( body ) : undefined
-	} );assert.equal( ( await fetch( base + "/api/state" ) ).status, 401 );const state = await( await req( "/api/state" ) ).json();assert.equal( JSON.stringify( state ).includes( service.token ), false );assert.equal( ( await req(
+		method, headers: { Authorization: `Bearer ${service.password}`, ...body ? { "Content-Type": "application/json" } : {} }, body: body ? JSON.stringify( body ) : undefined
+	} );assert.equal( service.password, "123" );assert.equal( ( await fetch( base + "/api/state" ) ).status, 401 );const state = await( await req( "/api/state" ) ).json();assert.equal( JSON.stringify( state ).includes( service.password ), false );assert.equal( ( await req(
 		"/api/control", "POST", { action: "pause" }
-	) ).status, 200 );assert.equal( service.snapshot().state.paused, true );const saved = await req(
+	) ).status, 200 );assert.equal( service.snapshot().state.paused, true );assert.equal( service.snapshot().state.sceneRevision, state.state.sceneRevision );assert.equal( ( await req(
+		"/api/control", "POST", { action: "select", id: state.config.scenes[ 0 ].id }
+	) ).status, 200 );assert.equal( service.snapshot().state.sceneRevision, state.state.sceneRevision + 1 );const saved = await req(
 		"/api/config", "PUT", { config: { ...state.config, name: "Family" }, revision: state.state.revision }
 	);assert.equal( saved.status, 200 );assert.equal( ( await req(
 		"/api/config", "PUT", { config: state.config, revision: 0 }
@@ -66,8 +72,8 @@ test( "authenticated API controls, optimistic concurrency, uploads, secrets and 
 	) ).status, 200 );assert.equal( JSON.stringify( await( await req( "/api/state" ) ).json() ).includes( "test-secret" ), false );const form = new FormData();form.append(
 		"files", new Blob( [ "<html>hello</html>" ], { type: "text/html" } ), "hello.html"
 	);const upload = await fetch( base + "/api/upload", {
-		method: "POST", headers: { Authorization: `Bearer ${service.token}` }, body: form
-	} );assert.equal( upload.status, 200 );const { sources } = await upload.json();assert.equal( ( await fetch( base + sources[ 0 ] ) ).status, 401 );const media = await fetch( base + sources[ 0 ] + `?token=${service.token}` );assert.equal( await media.text(), "<html>hello</html>" );assert.match( media.headers.get( "content-security-policy" ), /sandbox/ );const abort = new AbortController();const stream = await fetch( base + `/api/events?token=${service.token}`, { signal: abort.signal } );const reader = stream.body.getReader();const chunk = await reader.read();assert.match( new TextDecoder().decode( chunk.value ), /Family/ );abort.abort();await reader.cancel().catch( () => {} );
+		method: "POST", headers: { Authorization: `Bearer ${service.password}` }, body: form
+	} );assert.equal( upload.status, 200 );const { sources } = await upload.json();assert.equal( ( await fetch( base + sources[ 0 ] ) ).status, 401 );const media = await fetch( base + sources[ 0 ] + `?password=${service.password}` );assert.equal( await media.text(), "<html>hello</html>" );assert.match( media.headers.get( "content-security-policy" ), /sandbox/ );const abort = new AbortController();const stream = await fetch( base + `/api/events?password=${service.password}`, { signal: abort.signal } );const reader = stream.body.getReader();const chunk = await reader.read();assert.match( new TextDecoder().decode( chunk.value ), /Family/ );abort.abort();await reader.cancel().catch( () => {} );
 } );
 test( "MPD parser handles fragmented greeting and song values containing colons", async t => {
 	const server = net.createServer( socket => {
@@ -85,6 +91,6 @@ test( "simultaneous configuration saves cannot overwrite each other", async t =>
 	const directory = await fixture( t ), initial = await new JsonStore( directory ).init();initial.config.widgets.forEach( w => w.enabled = false );await initial.update( initial.config );const service = await createWallServer( {
 		directory, host: "127.0.0.1", port: 0, dist: path.resolve( "dist" )
 	} );t.after( () => service.close() );const base = `http://127.0.0.1:${service.server.address().port}`;const update = name => fetch( base + "/api/config", {
-		method: "PUT", headers: { Authorization: `Bearer ${service.token}`, "Content-Type": "application/json" }, body: JSON.stringify( { config: { ...initial.config, name }, revision: 0 } )
+		method: "PUT", headers: { Authorization: `Bearer ${service.password}`, "Content-Type": "application/json" }, body: JSON.stringify( { config: { ...initial.config, name }, revision: 0 } )
 	} );const responses = await Promise.all( [ update( "First" ), update( "Second" ) ] );assert.deepEqual( responses.map( r => r.status ).sort(), [ 200, 409 ] );assert.equal( service.snapshot().state.revision, 1 );
 } );

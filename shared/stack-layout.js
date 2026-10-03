@@ -1,5 +1,45 @@
 const border = 9;
-const stackSize = 25;
+export const initialStackSize = 10;
+
+function seededRandom( seed ) {
+	let state = 2166136261;
+
+	for ( const character of String( seed ) ) {
+		state = Math.imul( state ^ character.codePointAt( 0 ), 16777619 );
+	}
+
+	return () => {
+		state += 0x6D2B79F5;
+		let value = state;
+		value = Math.imul( value ^ value >>> 15, value | 1 );value ^= value + Math.imul( value ^ value >>> 7, value | 61 );
+		return ( ( value ^ value >>> 14 ) >>> 0 ) / 4294967296;
+	};
+}
+
+export function shufflePictures( sources, seed ) {
+	const pictures = [ ...new Set( sources ) ], random = seed === undefined ? Math.random : seededRandom( seed );
+
+	for ( let index = pictures.length - 1; index > 0; index-- ) {
+		const other = Math.floor( random() * ( index + 1 ) );
+		[ pictures[ index ], pictures[ other ] ] = [ pictures[ other ], pictures[ index ] ];
+	}
+
+	return pictures;
+}
+
+export function distributePictures( sources, stackCount ) {
+	if ( stackCount <= 0 ) {
+		return [];
+	}
+
+	const stacks = Array.from( { length: stackCount }, () => [] );
+
+	for ( const [ index, source ] of [ ...new Set( sources ) ].entries() ) {
+		stacks[ index % stackCount ].push( source );
+	}
+
+	return stacks;
+}
 
 export function stackImageSize( image, monitor ) {
 	const width = image?.width || monitor.width, height = image?.height || monitor.height;
@@ -14,32 +54,66 @@ export function stackImageSize( image, monitor ) {
 	};
 }
 
-export function stackLayout(
-	monitor, monitorIndex, images, startIndex = 0
+export function stackCardLayout(
+	monitor, image, card
 ) {
-	return images.map( ( image, index ) => {
-		const i = startIndex + index + 1, n = i + monitorIndex * 5;
-		const size = stackImageSize( image, monitor );
-		const rotation = n * 13 % 29 - 14;
-		const radians = rotation * Math.PI / 180;
-		return {
-			...size,
-			rotation,
-			zIndex:  i,
-			x:       ( 18.5 + n * 31 % 64 ) / 100 * monitor.width,
-			y:       ( 21.5 + n * 23 % 58 ) / 100 * monitor.height,
-			extentX: ( Math.abs( Math.cos( radians ) ) * size.width + Math.abs( Math.sin( radians ) ) * size.height ) / 2,
-			extentY: ( Math.abs( Math.sin( radians ) ) * size.width + Math.abs( Math.cos( radians ) ) * size.height ) / 2
-		};
-	} );
+	const size = stackImageSize( image, monitor );
+	const radians = card.rotation * Math.PI / 180;
+	return {
+		...size,
+		rotation: card.rotation,
+		zIndex:   card.placement,
+		x:        card.x * monitor.width,
+		y:        card.y * monitor.height,
+		extentX:  ( Math.abs( Math.cos( radians ) ) * size.width + Math.abs( Math.sin( radians ) ) * size.height ) / 2,
+		extentY:  ( Math.abs( Math.sin( radians ) ) * size.width + Math.abs( Math.cos( radians ) ) * size.height ) / 2
+	};
 }
 
-export function stackPictures(
-	sources, step, monitorIndex
+function pictureCard(
+	source, placement, seed
 ) {
-	if ( !sources.length ) {
-		return [];
+	const pair = Math.floor( ( placement - 1 ) / 2 ), random = seededRandom( `${seed}:position:${pair}` );
+	let x = 0.19 + random() * 0.62, y = 0.22 + random() * 0.56;
+
+	if ( placement % 2 === 0 ) {
+		x = 1 - x;y = 1 - y;
 	}
 
-	return Array.from( { length: stackSize }, ( _, index ) => sources[ ( step + index + 1 + monitorIndex * stackSize ) % sources.length ] );
+	const rotation = seededRandom( `${seed}:rotation:${placement}` )() * 28 - 14;
+	return {
+		source, placement, x, y, rotation
+	};
+}
+
+export function createPictureStack(
+	sources, monitorIndex = 0, seed = "stack"
+) {
+	const order = [ ...new Set( sources ) ];
+	const initial = Math.min( initialStackSize, order.length ), stackSeed = `${seed}:monitor:${monitorIndex}`;
+	return {
+		order,
+		seed:          stackSeed,
+		cursor:        order.length ? initial % order.length : 0,
+		nextPlacement: initial + 1,
+		cards:         order.slice( 0, initial ).map( ( source, index ) => pictureCard(
+			source, index + 1, stackSeed
+		) )
+	};
+}
+
+export function advancePictureStack( stack ) {
+	if ( !stack.order.length ) {
+		return stack;
+	}
+
+	const source = stack.order[ stack.cursor ];
+	return {
+		...stack,
+		cursor:        ( stack.cursor + 1 ) % stack.order.length,
+		nextPlacement: stack.nextPlacement + 1,
+		cards:         [ ...stack.cards.filter( card => card.source !== source ), pictureCard(
+			source, stack.nextPlacement, stack.seed
+		) ]
+	};
 }

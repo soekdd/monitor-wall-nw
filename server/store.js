@@ -11,6 +11,23 @@ export class JsonStore {
 	}
 	async init() {
 		await mkdir( path.join( this.directory, "media" ), { recursive: true } ); let raw;
+		let access;
+
+		try {
+			access = JSON.parse( await readFile( path.join( this.directory, "config.json" ), "utf8" ) );
+		} catch( e ) {
+			if ( e.code !== "ENOENT" ) {
+				throw new Error( `config.json ist ungültig: ${e.message}` );
+			}
+
+			access = { password: "123" };await this.atomic( "config.json", access );
+		}
+
+		if ( !access || typeof access !== "object" || Array.isArray( access ) || typeof access.password !== "string" || !access.password ) {
+			throw new Error( "config.json ist ungültig: password muss eine nicht leere Zeichenkette sein." );
+		}
+
+		this.access = access;
 
 		try {
 			raw = JSON.parse( await readFile( path.join( this.directory, "settings.json" ), "utf8" ) ); configSchema.parse( raw );
@@ -34,7 +51,7 @@ export class JsonStore {
 			secrets = {};
 		}
 
-		const migrated = migrateApis( raw, secrets ); this.config = configSchema.parse( migrated.config );this.secrets = migrated.secrets;
+		const migrated = migrateApis( raw, secrets ), migratedSecrets = { ...migrated.secrets };delete migratedSecrets.adminToken;this.config = configSchema.parse( migrated.config );this.secrets = migratedSecrets;
 
 		if ( JSON.stringify( secrets ) !== JSON.stringify( this.secrets ) ) {
 			await this.atomic( "secrets.json", this.secrets );

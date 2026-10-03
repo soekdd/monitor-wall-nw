@@ -135,7 +135,7 @@ test( "authenticated gallery API displays stacks, proxies bytes and guards bound
 		directory, host: "127.0.0.1", port: 0, dist: path.resolve( "dist" ), googleCredentialsDirectory: directory, photosOptions: { fetchImpl: mock.fetchImpl, now: mock.nowFn }
 	} ); t.after( () => server.close() );
 	assert.equal( server.snapshot().googlePhotos.credentialSource, "client_secret.json" );
-	const base = `http://127.0.0.1:${server.server.address().port}`, headers = { Authorization: `Bearer ${server.token}`, "Content-Type": "application/json" };
+	const base = `http://127.0.0.1:${server.server.address().port}`, headers = { Authorization: `Bearer ${server.password}`, "Content-Type": "application/json" };
 	const req = (
 		url, method = "GET", data
 	) => fetch( base + url, {

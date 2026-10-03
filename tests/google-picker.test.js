@@ -49,7 +49,7 @@ test( "legacy service options, credentials and Ambient bindings migrate once and
 		}
 	} ) );
 	const store = await new JsonStore( directory ).init();
-	assert.equal( store.config.widgets.find( w => w.id === "weather" ).apiId, "api-weather" );assert.deepEqual( store.config.widgets.find( w => w.id === "weather" ).options, {} );assert.equal( store.config.apis.find( a => a.id === "api-weather" ).options.latitude, 51.05 );assert.equal( store.secrets.apis[ "api-mpd" ].password, "private-mpd" );assert.equal( store.secrets.mpd, undefined );assert.equal( store.secrets.googlePhotos, undefined );assert.equal( store.config.scenes.at( -1 ).apiId, "google-ambient" );assert.equal( store.secrets.apis[ "google-ambient" ].devices.cloud.id, "device" );assert.equal( store.secrets.apis[ "google-picker" ].refreshToken, undefined );
+	assert.equal( store.config.widgets.find( w => w.id === "weather" ).apiId, "api-weather" );assert.deepEqual( store.config.widgets.find( w => w.id === "weather" ).options, {} );assert.equal( store.config.apis.find( a => a.id === "api-weather" ).options.latitude, 51.05 );assert.equal( store.secrets.apis[ "api-mpd" ].password, "private-mpd" );assert.equal( store.secrets.mpd, undefined );assert.equal( store.secrets.googlePhotos, undefined );assert.equal( store.secrets.adminToken, undefined );assert.equal( store.config.scenes.at( -1 ).apiId, "google-ambient" );assert.equal( store.secrets.apis[ "google-ambient" ].devices.cloud.id, "device" );assert.equal( store.secrets.apis[ "google-picker" ].refreshToken, undefined );
 	const restarted = await new JsonStore( directory ).init();assert.deepEqual( restarted.config, store.config );assert.deepEqual( restarted.secrets, store.secrets );
 	assert.equal( store.config.apis.filter( a => a.type === "weather" ).length, 1 );assert.equal( store.config.widgets.at( -1 ).apiId, "api-weather" );
 	const manager = new ApiConnections( restarted );assert.equal( manager.status()[ "google-ambient" ].connected, true );assert.equal( manager.status()[ "google-picker" ].connected, false );assert.equal( JSON.stringify( manager.status() ).includes( "private-" ), false );
@@ -92,6 +92,14 @@ test( "failed downloads preserve old scene and clean staged files; no token sent
 		picker, scene, google
 	);google.failDownload = true;await picker.beginImport( scene );await picker.jobs.get( scene.id ).promise;assert.equal( picker.jobs.get( scene.id ).status, "error" );assert.deepEqual( store.config.scenes.at( -1 ).sources, [ "/demo/alpine.svg" ] );assert.deepEqual( await readdir( path.join( directory, "media" ) ), [] );
 	google.failDownload = false;google.badHost = true;await picker.beginImport( scene );await picker.jobs.get( scene.id ).promise;assert.equal( picker.jobs.get( scene.id ).status, "error" );assert.equal( google.pickerCalls.some( c => c.url.startsWith( "https://evil.example" ) ), false );
+} );
+test( "corrupt photos are skipped without aborting the Picker import", async t => {
+	const {
+		store, picker, scene, google, directory
+	} = await fixture( t );await ready(
+		picker, scene, google
+	);google.corruptDownload = true;await picker.beginImport( scene );await picker.jobs.get( scene.id ).promise;
+	const job = picker.jobs.get( scene.id );assert.equal( job.status, "done" );assert.equal( job.completed, 2 );assert.equal( job.skipped, 1 );assert.equal( store.config.scenes.at( -1 ).sources.length, 1 );assert.equal( ( await readdir( path.join( directory, "media" ) ) ).length, 1 );
 } );
 test( "shutdown aborts an active download, removes temporary files and preserves the old stack", async t => {
 	const {
@@ -151,7 +159,7 @@ test( "authenticated Picker API imports and renders durable files without exposi
 	} = await fixture( t );store.config.widgets.forEach( w => w.enabled = false );await store.update( store.config );
 	const service = await createWallServer( {
 		directory, host: "127.0.0.1", port: 0, dist: path.resolve( "dist" ), photosOptions: { fetchImpl: google.fetchImpl, now: google.nowFn }
-	} );t.after( () => service.close() );const base = `http://127.0.0.1:${service.server.address().port}`;const headers = { Authorization: `Bearer ${service.token}`, "Content-Type": "application/json" };const req = (
+	} );t.after( () => service.close() );const base = `http://127.0.0.1:${service.server.address().port}`;const headers = { Authorization: `Bearer ${service.password}`, "Content-Type": "application/json" };const req = (
 		route, method = "POST", body
 	) => fetch( base + route, {
 		method, headers, body: body ? JSON.stringify( body ) : undefined

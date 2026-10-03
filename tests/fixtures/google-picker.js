@@ -3,7 +3,7 @@ import { fakeGoogle } from "./google-photos.js";
 
 export function fakePicker() {
 	const google = fakeGoogle(), delegate = google.fetchImpl;
-	google.selected = false;google.failDownload = false;google.badHost = false;google.pickerCalls = [];
+	google.selected = false;google.failDownload = false;google.corruptDownload = false;google.badHost = false;google.pickerCalls = [];
 
 	google.fetchImpl = async( url, options = {} ) => {
 		url = String( url );google.pickerCalls.push( { url, options } );
@@ -28,6 +28,10 @@ export function fakePicker() {
 
 		if ( google.failDownload && url.startsWith( "https://lh3.googleusercontent.com/two" ) ) {
 			return new Response( "fail", { status: 503 } );
+		}
+
+		if ( google.corruptDownload && url.startsWith( "https://lh3.googleusercontent.com/two" ) ) {
+			return new Response( "not a jpeg", { headers: { "content-type": "image/jpeg" } } );
 		}
 
 		return delegate( url, options );

@@ -36,7 +36,7 @@ app.whenReady().then( async() => {
 				errors.push( event.message );
 			}
 		} );
-		await win.loadURL( `${base}/admin#token=${service.token}` );
+		await win.loadURL( `${base}/admin#password=${encodeURIComponent( service.password )}` );
 		const run = code => win.webContents.executeJavaScript( code );
 		const isFullscreen = () => win.isFullScreen() || process.platform === "darwin" && win.isSimpleFullScreen();
 
@@ -209,14 +209,14 @@ app.whenReady().then( async() => {
 			id: "cloud-gallery", apiId: "google-ambient", title: "Familienalbum aus Google", type: "google-photos", category: "Familie", sources: [], enabled: true, weight: 3, seasons: [], hours: [], scrollSeconds: 90
 		};
 		await service.store.update( { ...service.store.config, scenes: [ ...service.store.config.scenes, galleryScene ] } );
-		await win.loadURL( `${base}/wall#token=${service.token}` );
+		await win.loadURL( `${base}/wall#password=${encodeURIComponent( service.password )}` );
 		await waitFor( "!!document.querySelector('.wall-world')" );
 		await service.connections.saveSecrets( "google-ambient", { refreshToken: "private-refresh" } );
 		await service.photos.connectScene( galleryScene );await service.photos.refresh( galleryScene );service.broadcast();
-		await run( `fetch('/api/control',{method:'POST',headers:{Authorization:'Bearer ${service.token}','Content-Type':'application/json'},body:JSON.stringify({action:'select',id:'cloud-gallery'})}).then(r=>r.json())` );
-		await waitFor( "document.querySelectorAll('.stack-monitor').length===4&&document.querySelectorAll('.stack-monitor img').length===100" );
+		await run( `fetch('/api/control',{method:'POST',headers:{Authorization:'Bearer ${service.password}','Content-Type':'application/json'},body:JSON.stringify({action:'select',id:'cloud-gallery'})}).then(r=>r.json())` );
+		await waitFor( "document.querySelectorAll('.stack-monitor').length===4&&document.querySelectorAll('.stack-monitor img').length===2" );
 		await waitFor( "Array.from(document.querySelectorAll('.stack-monitor img')).every(img=>img.complete&&img.naturalWidth>0)" );
-		await win.loadURL( `${base}/admin#token=${service.token}` );
+		await win.loadURL( `${base}/admin#password=${encodeURIComponent( service.password )}` );
 		await waitFor( "document.body.innerText.includes('Schön, zu Hause zu sein.')" );
 		await run( "Array.from(document.querySelectorAll('.v-list-item')).find(e=>e.innerText.includes('Mediathek')).click()" );
 		await waitFor( "document.querySelectorAll('.media-card').length===6" );
@@ -249,19 +249,19 @@ app.whenReady().then( async() => {
 		assert.equal( service.store.config.scenes.find( s => s.id === "picked-gallery" ).sources.length, 2 );
 		await new Promise( resolve => setTimeout( resolve, 400 ) );
 		await fs.writeFile( "/private/tmp/monitor-wall-picker-import.png", ( await win.webContents.capturePage() ).toPNG() );
-		await win.loadURL( `${base}/wall#token=${service.token}` );
+		await win.loadURL( `${base}/wall#password=${encodeURIComponent( service.password )}` );
 		await waitFor( "!!document.querySelector('.wall-world')" );
-		await run( `fetch('/api/control',{method:'POST',headers:{Authorization:'Bearer ${service.token}','Content-Type':'application/json'},body:JSON.stringify({action:'select',id:'picked-gallery'})}).then(r=>r.json())` );
-		await waitFor( "document.querySelectorAll('.stack-monitor img').length===100&&Array.from(document.querySelectorAll('.stack-monitor img')).every(img=>img.complete&&img.naturalWidth>0&&img.src.includes('/media/google-picker-'))" );
+		await run( `fetch('/api/control',{method:'POST',headers:{Authorization:'Bearer ${service.password}','Content-Type':'application/json'},body:JSON.stringify({action:'select',id:'picked-gallery'})}).then(r=>r.json())` );
+		await waitFor( "document.querySelectorAll('.stack-monitor img').length===2&&Array.from(document.querySelectorAll('.stack-monitor img')).every(img=>img.complete&&img.naturalWidth>0&&img.src.includes('/media/google-picker-'))" );
 		const assignedMonitor = service.store.config.monitors.find( m => m.enabled ).id;
 
-		await win.loadURL( `${base}/wall?monitor=${encodeURIComponent( assignedMonitor )}#token=${service.token}` );
+		await win.loadURL( `${base}/wall?monitor=${encodeURIComponent( assignedMonitor )}#password=${encodeURIComponent( service.password )}` );
 		await waitFor( "!!document.querySelector('.wall-pulldown button')" );
 		await run( "document.querySelector('.wall-pulldown button').click()" );
 		await waitFor( "Array.from(document.querySelectorAll('button')).some(e=>e.innerText.includes('Verwaltung öffnen'))" );
 		await run( "Array.from(document.querySelectorAll('button')).find(e=>e.innerText.includes('Verwaltung öffnen')).click()" );
 		await waitFor( `location.pathname==='/admin'&&new URLSearchParams(location.search).get('monitor')==='${assignedMonitor}'` );
-		await win.loadURL( `${base}/admin?monitor=${encodeURIComponent( assignedMonitor )}#token=${service.token}` );
+		await win.loadURL( `${base}/admin?monitor=${encodeURIComponent( assignedMonitor )}#password=${encodeURIComponent( service.password )}` );
 		await waitFor( "document.body.innerText.includes('Schön, zu Hause zu sein.')" );
 		await run( "Array.from(document.querySelectorAll('button')).find(e=>e.innerText.includes('Bilderwand öffnen')).click()" );
 		await waitFor( `location.pathname==='/wall'&&new URLSearchParams(location.search).get('monitor')==='${assignedMonitor}'&&!!document.querySelector('.fullscreen-wall')` );

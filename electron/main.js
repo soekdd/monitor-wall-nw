@@ -40,7 +40,7 @@ if ( !app.requestSingleInstanceLock() ) {
 			pidFile, `${process.pid}\n`, { mode: 0o600 }
 		);
 		const port = Number( process.env.WALL_PORT ) || 3210;
-		const local = route => `http://127.0.0.1:${port}${route}#token=${service.token}`;
+		const local = route => `http://127.0.0.1:${port}${route}#password=${encodeURIComponent( service.password )}`;
 
 		const available = () => {
 			const primaryId = screen.getPrimaryDisplay().id;
