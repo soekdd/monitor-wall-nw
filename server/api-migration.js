@@ -35,6 +35,36 @@ export function migrateApis( input, inputSecrets ) {
 
 	delete secrets.googlePhotos;
 
+	for ( const api of config.apis.filter( api => api.type === "school" && api.options?.url ) ) {
+		try {
+			const url = new URL( api.options.url );
+
+			if ( url.username || url.password ) {
+				const credentials = { ...secrets.apis[ api.id ] };
+
+				const decode = value => {
+					try {
+						return decodeURIComponent( value );
+					} catch {
+						return value;
+					}
+				};
+
+				if ( !( "username" in credentials ) && url.username ) {
+					credentials.username = decode( url.username );
+				}
+
+				if ( !( "password" in credentials ) && url.password ) {
+					credentials.password = decode( url.password );
+				}
+
+				url.username = "";url.password = "";api.options.url = url.toString();secrets.apis[ api.id ] = credentials;
+			}
+		} catch {
+			// URL validation reports malformed values when the configuration is saved.
+		}
+	}
+
 	for ( const scene of config.scenes ) {
 		if ( apiTypeForScene( scene.type ) && !scene.apiId ) {
 			scene.apiId = config.apis.find( a => a.type === apiTypeForScene( scene.type ) ).id;

@@ -20,7 +20,12 @@ export const apiTypes = [
 		}
 	},
 	{
-		value: "school", title: "Vertretungsplan · JSON", help: "url: JSON-Endpunkt, class: Klasse. Alternativ rows: Texte oder Objekte mit date, class, lesson, subject, text.", options: { url: "", rows: [] }
+		value:   "school",
+		title:   "Vertretungsplan · JSON",
+		help:    "url: JSON-Endpunkt oder Stundenplan24-XML, class: Klasse oder Klassenliste, z. B. [\"5a\",\"7b\"]. Jede Klasse wird in einer Zeile zusammengefasst. Benutzername und Passwort unter Zugangsdaten eintragen. Alternativ rows: Texte oder Objekte mit date, class, lesson, subject, text.",
+		options: {
+			url: "", class: [], rows: []
+		}
 	},
 	{
 		value: "mpd", title: "MPD", help: "host, port: Musikserver. Optional password unter Zugangsdaten.", options: { host: "127.0.0.1", port: 6600 }

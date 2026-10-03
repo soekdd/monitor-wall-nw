@@ -16,6 +16,70 @@ export async function fetchJson( url, options = {} ) {
 	return r.json();
 }
 
+const decodeXml = value => {
+	const cdata = [];const text = value
+		.replace( /<!\[CDATA\[([\s\S]*?)\]\]>/g, ( _, content ) => `\0${cdata.push( content ) - 1}\0` )
+		.replace( /<[^>]*>/g, "" )
+		.replace( /&#x([0-9a-f]+);/gi, ( _, code ) => String.fromCodePoint( Number.parseInt( code, 16 ) ) )
+		.replace( /&#([0-9]+);/g, ( _, code ) => String.fromCodePoint( Number.parseInt( code, 10 ) ) )
+		.replace( /&(amp|lt|gt|quot|apos);/g, ( _, entity ) => ( {
+			amp: "&", lt: "<", gt: ">", quot: "\"", apos: "'"
+		} )[ entity ] )
+		.replace( /\0(\d+)\0/g, ( _, index ) => cdata[ Number( index ) ] )
+		.trim();
+
+	return text;
+};
+
+const xmlValue = ( xml, tag ) => {
+	const match = xml.match( new RegExp( `<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`, "i" ) );
+
+	return match ? decodeXml( match[ 1 ] ) : "";
+};
+
+export function parseSchoolXml( xml ) {
+	if ( !/<(?:vp|aktion)(?:\s|>)/i.test( xml ) ) {
+		throw new Error( "Vertretungsplan liefert weder ein JSON-Array noch gültiges Stundenplan24-XML" );
+	}
+
+	return [ ...xml.matchAll( /<aktion(?:\s[^>]*)?>([\s\S]*?)<\/aktion>/gi ) ].map( match => ( {
+		class:   xmlValue( match[ 1 ], "klasse" ),
+		lesson:  xmlValue( match[ 1 ], "stunde" ),
+		subject: xmlValue( match[ 1 ], "fach" ),
+		text:    xmlValue( match[ 1 ], "info" )
+	} ) );
+}
+
+async function fetchSchoolRows( url, secrets ) {
+	const u = new URL( url );
+
+	if ( ![ "http:", "https:" ].includes( u.protocol ) ) {
+		throw new Error( "Nur HTTP(S) erlaubt" );
+	}
+
+	const headers = {};
+
+	if ( secrets.authorization ) {
+		headers.Authorization = secrets.authorization;
+	} else if ( secrets.username || secrets.password ) {
+		headers.Authorization = `Basic ${Buffer.from( `${secrets.username || ""}:${secrets.password || ""}` ).toString( "base64" )}`;
+	}
+
+	const response = await fetch( u, { headers, signal: AbortSignal.timeout( 12000 ) } );
+
+	if ( !response.ok ) {
+		throw new Error( `Dienst antwortet mit HTTP ${response.status}` );
+	}
+
+	const body = await response.text(), contentType = response.headers.get( "content-type" ) || "";
+
+	if ( /json/i.test( contentType ) || /^\s*\[/.test( body ) ) {
+		return JSON.parse( body );
+	}
+
+	return parseSchoolXml( body );
+}
+
 export function mpd( options, password ) {
 	return new Promise( ( resolve, reject ) => {
 		const socket = net.createConnection( { host: options.host || "127.0.0.1", port: Number( options.port ) || 6600 } );let buffer = "", greeted = false;
@@ -72,14 +136,31 @@ export async function loadWidget(
 				.map( r => `${r[ 0 ]}  ${r[ 1 ]}  ·  ${r[ 2 ]} min` )
 		};}
 
-		case "school": {const rows = o.url ? await fetchJson( o.url, { headers: s.authorization ? { Authorization: s.authorization } : {} } ) : o.rows;
+		case "school": {const rows = o.url ? await fetchSchoolRows( o.url, s ) : o.rows;
 
 			if ( !Array.isArray( rows ) ) {
 				throw new Error( "Vertretungsplan muss ein JSON-Array liefern" );
 			}
 
+			const configuredClasses = [ ...new Set( (
+				Array.isArray( o.class ) ? o.class : Array.isArray( o.classes ) ? o.classes : o.class ? [ o.class ] : []
+			)
+				.map( value => String( value ).trim() )
+				.filter( Boolean ) ) ];
+			const details = row => typeof row === "string" ? row : [ row.date, row.lesson, row.subject, row.text ].filter( Boolean ).join( " · " );
+
+			if ( configuredClasses.length ) {
+				return {
+					lines: configuredClasses.map( schoolClass => {
+						const hits = rows.filter( row => typeof row === "object" && row?.class === schoolClass ).map( details );
+
+						return `${schoolClass}: ${hits.length ? hits.join( " / " ) : "keine Vertretungen"}`;
+					} )
+				};
+			}
+
 			return {
-				lines: rows.filter( r => !o.class || r.class === o.class ).slice( 0, 10 )
+				lines: rows.slice( 0, 10 )
 					.map( r => typeof r === "string" ? r : [ r.date, r.class, r.lesson, r.subject, r.text ].filter( Boolean ).join( " · " ) )
 			};}
 

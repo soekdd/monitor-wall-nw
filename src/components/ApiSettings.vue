@@ -5,7 +5,7 @@ import {
 } from "../api";
 import { apiTypes } from "../../shared/api-types";
 import GoogleApiAccount from "./GoogleApiAccount.vue";
-const dialog = ref( false ), draft = ref( null ), options = ref( "{}" ), secrets = ref( "{}" ), busy = ref( false ), error = ref( "" ), notice = ref( "" );
+const dialog = ref( false ), draft = ref( null ), options = ref( "{}" ), secrets = ref( "{}" ), schoolUsername = ref( "" ), schoolPassword = ref( "" ), busy = ref( false ), error = ref( "" ), notice = ref( "" );
 const typeInfo = type => apiTypes.find( t => t.value === type );
 const references = id => [ ...wall.config.scenes, ...wall.config.widgets ].filter( e => e.apiId === id );
 
@@ -14,13 +14,13 @@ function edit( api ) {
 		id: createId(), title: "Neue API-Verbindung", type: "weather", options: { latitude: 51.05, longitude: 13.74 }
 	};options.value = JSON.stringify(
 		draft.value.options, null, 2
-	);secrets.value = "{}";error.value = "";dialog.value = true;
+	);secrets.value = "{}";schoolUsername.value = "";schoolPassword.value = "";error.value = "";dialog.value = true;
 }
 
 function changeType( type ) {
 	draft.value.type = type;draft.value.title = typeInfo( type ).title;options.value = JSON.stringify(
 		typeInfo( type ).options, null, 2
-	);secrets.value = "{}";
+	);secrets.value = "{}";schoolUsername.value = "";schoolPassword.value = "";
 }
 
 async function commit() {
@@ -28,6 +28,16 @@ async function commit() {
 
 	try {
 		const parsed = JSON.parse( options.value ), credentials = JSON.parse( secrets.value );
+
+		if ( draft.value.type === "school" ) {
+			if ( schoolUsername.value ) {
+				credentials.username = schoolUsername.value;
+			}
+
+			if ( schoolPassword.value ) {
+				credentials.password = schoolPassword.value;
+			}
+		}
 
 		if ( !parsed || Array.isArray( parsed ) || typeof parsed !== "object" ) {
 			throw Error( "Dienstoptionen müssen ein JSON-Objekt sein." );
@@ -91,7 +101,12 @@ async function remove( api ) {
 		label="Dienstoptionen (JSON)"
 		rows="7"
 		variant="outlined"
-	/><template v-if="!typeInfo(draft.type)?.google"><p class="muted mb-3">Neue Zugangsdaten werden nur geschrieben. Ein leeres Objekt lässt vorhandene Werte unverändert. Leere Werte löschen die jeweilige Angabe. Unterstützt: password, authorization, clientId, clientSecret, refreshToken, apiKey.</p><v-textarea v-model="secrets"
+	/><template v-if="draft.type==='school'"><p class="muted mb-3">Zugangsdaten für HTTP Basic Auth. Leere Felder lassen bereits gespeicherte Werte unverändert.</p><v-text-field v-model="schoolUsername"
+		label="Benutzername"
+	/><v-text-field v-model="schoolPassword"
+		label="Passwort"
+		type="password"
+	/></template><template v-else-if="!typeInfo(draft.type)?.google"><p class="muted mb-3">Neue Zugangsdaten werden nur geschrieben. Ein leeres Objekt lässt vorhandene Werte unverändert. Leere Werte löschen die jeweilige Angabe. Unterstützt: username, password, authorization, clientId, clientSecret, refreshToken, apiKey.</p><v-textarea v-model="secrets"
 		class="code-input"
 		label="Neue Zugangsdaten (JSON)"
 		rows="4"

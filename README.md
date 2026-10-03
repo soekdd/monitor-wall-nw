@@ -77,7 +77,7 @@ Beispiel: Während Halloween werden Szenen mit ausschließlich „Herbst“ nich
 | Datum/Uhrzeit, Bildtitel | Ohne Zugangsdaten, lokal dargestellt |
 | Wetter | Open-Meteo, `latitude`, `longitude`; Dresden voreingestellt |
 | Bus/Bahn | VVO-Abfahrtsmonitor: `stop`, `minMinutes`, `exclude`, `limit` |
-| Vertretungsplan | `url` eines JSON-Endpunkts und optional `class`; alternativ `rows` mit Texten oder `{date,class,lesson,subject,text}` |
+| Vertretungsplan | `url` eines JSON-Endpunkts oder einer Stundenplan24-XML-Datei und optional `class` als einzelne Klasse oder Liste, z. B. `class: ["5a","7b"]`; alternativ `rows` mit Texten oder `{date,class,lesson,subject,text}`. Bei konfigurierten Klassen wird jede Klasse mit allen Treffern in einer Zeile zusammengefasst. Für geschützte Pläne `username` und `password` separat unter Zugangsdaten eintragen. |
 | MPD | `host`, `port`; optional `password` unter Zugangsdaten |
 | Google Kalender | `calendarId`, `days`; `clientId`, `clientSecret`, `refreshToken` unter Zugangsdaten. OAuth-Anmeldung und Refresh-Token müssen außerhalb dieser App eingerichtet werden, mit Calendar-Leseberechtigung. |
 | Kameras | `cameras: [{"name":"Eingang","url":"http://kamera/snapshot.jpg"}]`; Bild/MJPEG-Proxy im Backend. Optional `authorization` unter Zugangsdaten. RTSP wird nicht direkt unterstützt. |

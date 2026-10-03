@@ -6,12 +6,16 @@ import {
 import os from "node:os";
 import path from "node:path";
 import net from "node:net";
+import http from "node:http";
 import { defaults } from "../server/defaults.js";
 import { JsonStore } from "../server/store.js";
 import { configSchema } from "../server/schema.js";
 import { eligibleScenes, pickNext } from "../server/scheduler.js";
 import { createWallServer } from "../server/app.js";
-import { mpd } from "../server/providers.js";
+import {
+	loadWidget, mpd, parseSchoolXml
+} from "../server/providers.js";
+import { migrateApis } from "../server/api-migration.js";
 
 async function fixture( t ) {
 	const dir = await mkdtemp( path.join( os.tmpdir(), "wall-test-" ) );t.after( () => rm( dir, { recursive: true, force: true } ) );return dir;
@@ -85,6 +89,88 @@ test( "MPD parser handles fragmented greeting and song values containing colons"
 	} );await new Promise( resolve => server.listen(
 		0, "127.0.0.1", resolve
 	) );t.after( () => new Promise( resolve => server.close( resolve ) ) );const result = await mpd( { host: "127.0.0.1", port: server.address().port } );assert.deepEqual( result.lines, [ "A: song", "Test Artist · Album", "Wiedergabe" ] );
+} );
+
+test( "school widget groups multiple configured classes into one line each", async() => {
+	const widget = { type: "school", apiId: "school-plan" };const apis = [ {
+		id:      "school-plan",
+		type:    "school",
+		options: {
+			class: [ "5a", "7b", "8c", "5a" ],
+			rows:  [
+				{
+					date: "05.10.2026", class: "5a", lesson: "2", subject: "Mathe", text: "Frau Müller"
+				},
+				{
+					date: "05.10.2026", class: "7b", lesson: "4", subject: "Deutsch", text: "entfällt"
+				},
+				{
+					date: "05.10.2026", class: "5a", lesson: "3", subject: "Sport", text: "Turnhalle"
+				}
+			]
+		}
+	} ];
+
+	assert.deepEqual( ( await loadWidget(
+		widget, {}, apis
+	) ).lines, [
+		"5a: 05.10.2026 · 2 · Mathe · Frau Müller / 05.10.2026 · 3 · Sport · Turnhalle",
+		"7b: 05.10.2026 · 4 · Deutsch · entfällt",
+		"8c: keine Vertretungen"
+	] );
+} );
+
+test( "school widget remains compatible with one configured class", async() => {
+	const result = await loadWidget(
+		{ type: "school", apiId: "school-plan" }, {}, [ {
+			id:      "school-plan",
+			type:    "school",
+			options: {
+				class: "5a",
+				rows:  [ {
+					class: "5a", lesson: "1", subject: "Englisch", text: "Raum 12"
+				}, {
+					class: "7b", lesson: "2", subject: "Musik"
+				} ]
+			}
+		} ]
+	);
+
+	assert.deepEqual( result.lines, [ "5a: 1 · Englisch · Raum 12" ] );
+} );
+
+test( "school widget reads Stundenplan24 XML using separate basic credentials", async t => {
+	const xml = `<?xml version="1.0"?><vp><haupt>
+		<aktion><klasse>9a</klasse><stunde>2</stunde><fach>Ma&amp;the</fach><info><![CDATA[Raum <A>]]></info></aktion>
+		<aktion><klasse>10b</klasse><stunde>4</stunde><fach>Deutsch</fach><info>entfällt</info></aktion>
+	</haupt></vp>`;
+	const server = http.createServer( ( req, res ) => {
+		assert.equal( req.headers.authorization, `Basic ${Buffer.from( "student:shared-pass" ).toString( "base64" )}` );res.setHeader( "Content-Type", "application/xml" );res.end( xml );
+	} );await new Promise( resolve => server.listen(
+		0, "127.0.0.1", resolve
+	) );t.after( () => new Promise( resolve => server.close( resolve ) ) );const api = {
+		id:      "school-plan",
+		type:    "school",
+		options: { url: `http://127.0.0.1:${server.address().port}/VplanKl.xml`, class: [ "9a", "10b" ] }
+	};const result = await loadWidget(
+		{ type: "school", apiId: api.id },
+		{ apis: { [ api.id ]: { username: "student", password: "shared-pass" } } },
+		[ api ]
+	);
+
+	assert.deepEqual( result.lines, [ "9a: 2 · Ma&the · Raum <A>", "10b: 4 · Deutsch · entfällt" ] );
+} );
+
+test( "embedded school credentials migrate out of the URL", () => {
+	const input = defaults();input.apis = [ {
+		id: "school-plan", title: "School", type: "school", options: { url: "https://student%40school:p%40ss@example.test/VplanKl.xml", class: [ "9a" ] }
+	} ];const school = input.widgets.find( widget => widget.type === "school" );school.apiId = "school-plan";school.options = {};const migrated = migrateApis( input, {} );const api = migrated.config.apis.find( item => item.id === "school-plan" );
+
+	assert.equal( api.options.url, "https://example.test/VplanKl.xml" );assert.deepEqual( migrated.secrets.apis[ "school-plan" ], { username: "student@school", password: "p@ss" } );
+} );
+
+test( "Stundenplan24 XML parser rejects unrelated responses", () => {
+	assert.throws( () => parseSchoolXml( "<html>Login</html>" ), /gültiges Stundenplan24-XML/ );
 } );
 
 test( "simultaneous configuration saves cannot overwrite each other", async t => {

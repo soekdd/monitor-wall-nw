@@ -66,7 +66,7 @@ export class ApiConnections {
 	}
 	async saveSecrets( id, values ) {
 		const api = this.definition( id );
-		const allowed = [ "authorization", "password", "clientId", "clientSecret", "refreshToken", "apiKey" ];
+		const allowed = [ "username", "authorization", "password", "clientId", "clientSecret", "refreshToken", "apiKey" ];
 
 		if ( !values || Array.isArray( values ) || typeof values !== "object" || Object.entries( values ).some( ( [ k, v ] ) => !allowed.includes( k ) || typeof v !== "string" || v.length > 4000 || /[\r\n]/.test( v ) ) ) {
 			throw Object.assign( new Error( "Ungültige API-Zugangsdaten." ), { status: 400 } );

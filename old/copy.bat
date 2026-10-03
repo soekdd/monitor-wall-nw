@@ -1,0 +1,1 @@
+copy start.bat start.copy
