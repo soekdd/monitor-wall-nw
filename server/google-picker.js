@@ -17,6 +17,7 @@ const extensions = {
 	"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif", "image/avif": ".avif"
 };
 const fail = ( message, status = 400 ) => Object.assign( new Error( message ), { status } );
+const fatal = ( message, status = 400 ) => Object.assign( fail( message, status ), { fatal: true } );
 export class GooglePicker extends GooglePhotos {
 	constructor(
 		credentialsStore, store, options = {}
@@ -374,43 +375,50 @@ export class GooglePicker extends GooglePhotos {
 					throw fail( "Google hat eine ungültige Bildadresse geliefert.", 502 );
 				}
 
-				const name = `google-picker-${randomUUID()}.webp`;
-				const response = await this.fetch( `${u.href}=d`, {
-					headers: { Authorization: `Bearer ${await this.accessToken()}` }, signal: AbortSignal.any( [ this.shutdown.signal, AbortSignal.timeout( 120000 ) ] ), redirect: "error"
-				} );
-
-				if ( !response.ok || !extensions[ ( response.headers.get( "content-type" ) || "" ).split( ";" )[ 0 ] ] ) {
-					throw fail( "Ein ausgewähltes Foto konnte nicht heruntergeladen werden.", 502 );
-				}
-
-				let bytes = 0;
-				const limit = new Transform( {
-					transform(
-						chunk, _encoding, callback
-					) {
-						bytes += chunk.length;totalBytes += chunk.length;
-
-						if ( bytes > 50 * 1024 * 1024 || totalBytes > 2 * 1024 * 1024 * 1024 ) {
-							callback( fail( "Importlimit erreicht: maximal 50 MB pro Foto und 2 GB pro Auswahl." ) );
-						} else {
-							callback( null, chunk );
-						}
-					}
-				} );
-				await pipeline(
-					Readable.fromWeb( response.body ), limit, createWriteStream( path.join( staging, `${name}.download` ), { flags: "wx", mode: 0o600 } ), { signal: this.shutdown.signal }
-				);
-
-				if ( !bytes ) {
-					throw fail( "Google hat eine leere Bilddatei geliefert.", 502 );
-				}
-
-				let converted;
+				const name = `google-picker-${randomUUID()}.webp`, download = path.join( staging, `${name}.download` );
+				const authorization = `Bearer ${await this.accessToken()}`;let converted;
 
 				try {
-					converted = await webpImage( path.join( staging, `${name}.download` ), "google-picker" );
-				} catch {
-					await rm( path.join( staging, `${name}.download` ), { force: true } );
+					const response = await this.fetch( `${u.href}=d`, {
+						headers: { Authorization: authorization }, signal: AbortSignal.any( [ this.shutdown.signal, AbortSignal.timeout( 120000 ) ] ), redirect: "error"
+					} );
+
+					if ( !response.ok || !extensions[ ( response.headers.get( "content-type" ) || "" ).split( ";" )[ 0 ] ] ) {
+						throw fail( "Ein ausgewähltes Foto konnte nicht heruntergeladen werden.", 502 );
+					}
+
+					let bytes = 0;
+					const limit = new Transform( {
+						transform(
+							chunk, _encoding, callback
+						) {
+							bytes += chunk.length;totalBytes += chunk.length;
+
+							if ( totalBytes > 2 * 1024 * 1024 * 1024 ) {
+								callback( fatal( "Importlimit erreicht: maximal 2 GB pro Auswahl." ) );
+							} else if ( bytes > 50 * 1024 * 1024 ) {
+								callback( fail( "Das ausgewählte Foto ist größer als 50 MB." ) );
+							} else {
+								callback( null, chunk );
+							}
+						}
+					} );
+					await pipeline(
+						Readable.fromWeb( response.body ), limit, createWriteStream( download, { flags: "wx", mode: 0o600 } ), { signal: this.shutdown.signal }
+					);
+
+					if ( !bytes ) {
+						throw fail( "Google hat eine leere Bilddatei geliefert.", 502 );
+					}
+
+					converted = await webpImage( download, "google-picker" );
+				} catch( error ) {
+					await rm( download, { force: true } );this.shutdown.signal.throwIfAborted();
+
+					if ( error.fatal || [ "EACCES", "EMFILE", "ENFILE", "ENOSPC", "EROFS" ].includes( error.code ) ) {
+						throw error;
+					}
+
 					job.completed++;job.skipped++;this.onImport();continue;
 				}
 
@@ -418,7 +426,7 @@ export class GooglePicker extends GooglePhotos {
 				await writeFile(
 					path.join( staging, name ), converted, { flag: "wx", mode: 0o600 }
 				);
-				await rm( path.join( staging, `${name}.download` ), { force: true } );
+				await rm( download, { force: true } );
 				files.push( name );job.completed++;this.onImport();
 			}
 

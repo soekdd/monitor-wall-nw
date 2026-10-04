@@ -85,13 +85,15 @@ test( "Picker imports multiple pages locally, skips video, keeps scope separate 
 
 	google.now += 2 * 3600000;const restarted = await new JsonStore( directory ).init();assert.deepEqual( restarted.config.scenes.at( -1 ).sources, store.config.scenes.at( -1 ).sources );assert.equal( JSON.stringify( picker.status() ).includes( "private-" ), false );
 } );
-test( "failed downloads preserve old scene and clean staged files; no token sent to arbitrary hosts", async t => {
+test( "failed individual downloads are skipped; invalid hosts still abort without receiving a token", async t => {
 	const {
 		store, picker, scene, google, directory
 	} = await fixture( t );await ready(
 		picker, scene, google
-	);google.failDownload = true;await picker.beginImport( scene );await picker.jobs.get( scene.id ).promise;assert.equal( picker.jobs.get( scene.id ).status, "error" );assert.deepEqual( store.config.scenes.at( -1 ).sources, [ "/demo/alpine.svg" ] );assert.deepEqual( await readdir( path.join( directory, "media" ) ), [] );
-	google.failDownload = false;google.badHost = true;await picker.beginImport( scene );await picker.jobs.get( scene.id ).promise;assert.equal( picker.jobs.get( scene.id ).status, "error" );assert.equal( google.pickerCalls.some( c => c.url.startsWith( "https://evil.example" ) ), false );
+	);google.failDownload = true;await picker.beginImport( scene );await picker.jobs.get( scene.id ).promise;const completed = picker.jobs.get( scene.id );assert.equal( completed.status, "done" );assert.equal( completed.completed, 2 );assert.equal( completed.skipped, 1 );assert.equal( store.config.scenes.at( -1 ).sources.length, 1 );assert.equal( ( await readdir( path.join( directory, "media" ) ) ).length, 2 );
+	google.failDownload = false;google.badHost = true;const sources = store.config.scenes.at( -1 ).sources;await ready(
+		picker, scene, google
+	);await picker.beginImport( scene );await picker.jobs.get( scene.id ).promise;assert.equal( picker.jobs.get( scene.id ).status, "error" );assert.deepEqual( store.config.scenes.at( -1 ).sources, sources );assert.equal( google.pickerCalls.some( c => c.url.startsWith( "https://evil.example" ) ), false );
 } );
 test( "corrupt photos are skipped without aborting the Picker import", async t => {
 	const {
