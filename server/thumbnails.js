@@ -1,9 +1,8 @@
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import {
-	access, rm, writeFile
-} from "node:fs/promises";
+import { access, rm } from "node:fs/promises";
 import { thumbnailImage } from "./image-processing.js";
+import { writeDurable } from "./durable-files.js";
 
 const thumbnailPath = ( directory, source ) => source?.startsWith( "/media/thumbnail-" ) ? path.join(
 	directory, "media", source.slice( "/media/".length )
@@ -73,9 +72,7 @@ export async function prepareSceneThumbnails(
 				throw error;
 			}
 
-			await writeFile(
-				target, bytes, { flag: "wx", mode: 0o600 }
-			);
+			await writeDurable( target, bytes );
 			created.push( target );scene.thumbnail = `/media/${name}`;
 		}
 

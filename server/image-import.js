@@ -1,13 +1,12 @@
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { createWriteStream } from "node:fs";
-import {
-	writeFile, rename, rm
-} from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 
 import { webpImage } from "./image-processing.js";
+import { writeDurable } from "./durable-files.js";
 
 const extensions = {
 	"image/jpeg": ".jpg", "image/png": ".png", "image/webp": ".webp", "image/gif": ".gif", "image/avif": ".avif"
@@ -52,7 +51,7 @@ export async function downloadImage(
 		}
 
 		const name = `panorama-${randomUUID()}.webp`, target = path.join( directory, name );
-		staging = `${target}.download`;output = `${target}.part`;
+		staging = `${target}.download`;
 		let size = 0;
 		const limit = new Transform( {
 			transform(
@@ -72,9 +71,7 @@ export async function downloadImage(
 
 		const converted = await webpImage( staging, type );
 		controller.signal.throwIfAborted();
-		await writeFile(
-			target, converted, { flag: "wx" }
-		);
+		await writeDurable( target, converted );
 		return `/media/${name}`;
 	} catch( error ) {
 		if ( controller.signal.aborted ) {

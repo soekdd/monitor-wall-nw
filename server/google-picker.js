@@ -1,16 +1,18 @@
 import { thumbnailImage, webpImage } from "./image-processing.js";
-import { writeFile } from "node:fs/promises";
 import {
 	randomUUID, randomBytes, createHash
 } from "node:crypto";
 import {
-	mkdir, rename, rm, access
+	mkdir, rm, access
 } from "node:fs/promises";
 import path from "node:path";
 import { createWriteStream } from "node:fs";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { GooglePhotos, googleLink } from "./google-photos.js";
+import {
+	publishDurable, writeDurable, writeSynced
+} from "./durable-files.js";
 
 const API = "https://photospicker.googleapis.com/v1";
 const extensions = {
@@ -423,9 +425,7 @@ export class GooglePicker extends GooglePhotos {
 				}
 
 				this.shutdown.signal.throwIfAborted();
-				await writeFile(
-					path.join( staging, name ), converted, { flag: "wx", mode: 0o600 }
-				);
+				await writeSynced( path.join( staging, name ), converted );
 				await rm( download, { force: true } );
 				files.push( name );job.completed++;this.onImport();
 			}
@@ -437,13 +437,11 @@ export class GooglePicker extends GooglePhotos {
 			}
 
 			for ( const name of files ) {
-				await rename( path.join( staging, name ), path.join( media, name ) );
+				await publishDurable( path.join( staging, name ), path.join( media, name ) );
 			}
 
 			const thumbnailName = `thumbnail-${randomUUID()}.webp`;
-			thumbnail = path.join( media, thumbnailName );await writeFile(
-				thumbnail, await thumbnailImage( path.join( media, files[ 0 ] ) ), { flag: "wx", mode: 0o600 }
-			);
+			thumbnail = path.join( media, thumbnailName );await writeDurable( thumbnail, await thumbnailImage( path.join( media, files[ 0 ] ) ) );
 			let oldThumbnail;
 
 			await this.wallStore.modifyConfig( config => {

@@ -31,6 +31,33 @@ test( "access config is created with the initial password and custom passwords a
 test( "corrupt settings are reported and never overwritten", async t => {
 	const dir = await fixture( t );const { writeFile } = await import( "node:fs/promises" );await writeFile( path.join( dir, "settings.json" ), "{broken" );await assert.rejects( new JsonStore( dir ).init(), /ungültig/ );assert.equal( await readFile( path.join( dir, "settings.json" ), "utf8" ), "{broken" );
 } );
+test( "last known good settings and secrets recover corrupt primary files", async t => {
+	const dir = await fixture( t ), store = await new JsonStore( dir ).init();
+
+	await store.update( { ...store.config, name: "First" } );
+	await store.update( { ...store.config, name: "Second" } );
+	assert.equal( JSON.parse( await readFile( path.join( dir, "settings.json.bak" ), "utf8" ) ).name, "First" );
+	await store.saveSecrets( { token: "first" } );
+	await store.saveSecrets( { token: "second" } );
+	assert.deepEqual( JSON.parse( await readFile( path.join( dir, "secrets.json.bak" ), "utf8" ) ), { token: "first" } );
+
+	await writeFile( path.join( dir, "settings.json" ), "{broken" );
+	await writeFile( path.join( dir, "secrets.json" ), "{broken" );
+	const recovered = await new JsonStore( dir ).init();
+
+	assert.equal( recovered.config.name, "First" );
+	assert.equal( recovered.secrets.token, "first" );
+	assert.equal( JSON.parse( await readFile( path.join( dir, "settings.json" ), "utf8" ) ).name, "First" );
+	assert.equal( JSON.parse( await readFile( path.join( dir, "secrets.json" ), "utf8" ) ).token, "first" );
+} );
+test( "a corrupt backup never replaces a corrupt primary file", async t => {
+	const dir = await fixture( t );
+
+	await writeFile( path.join( dir, "settings.json" ), "{primary-broken" );
+	await writeFile( path.join( dir, "settings.json.bak" ), "{backup-broken" );
+	await assert.rejects( new JsonStore( dir ).init(), /settings.json ist ungültig/ );
+	assert.equal( await readFile( path.join( dir, "settings.json" ), "utf8" ), "{primary-broken" );
+} );
 test( "scheduler respects seasons, hours, disabled and future sources", () => {
 	const c = defaults();c.scenes.forEach( s => s.enabled = false );c.scenes[ 0 ] = {
 		...c.scenes[ 0 ], enabled: true, seasons: [ "winter" ], hours: [ 8 ]

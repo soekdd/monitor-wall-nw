@@ -21,6 +21,7 @@ test( "URL import saves an image locally, including URLs without a file extensio
 		"https://example.com/photo?id=1", directory, { fetchImpl: async() => new Response( bytes, { headers: { "content-type": "image/jpeg; charset=binary" } } ) }
 	);
 	assert.match( source, /^\/media\/panorama-.*\.webp$/ );
+	assert.equal( ( await readdir( directory ) ).some( file => file.includes( ".part-" ) || file.endsWith( ".download" ) ), false );
 	const metadata = await sharp( await readFile( path.join( directory, path.basename( source ) ) ) ).metadata();
 	assert.equal( metadata.format, "webp" );assert.equal( metadata.width, 2400 );assert.equal( metadata.height, 1200 );
 } );

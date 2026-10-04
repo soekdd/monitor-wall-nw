@@ -2,10 +2,9 @@ import express from "express";
 import multer from "multer";
 import path from "node:path";
 import { timingSafeEqual, randomUUID } from "node:crypto";
-import {
-	rename, rm, writeFile
-} from "node:fs/promises";
+import { rm } from "node:fs/promises";
 import { thumbnailImage, webpImage } from "./image-processing.js";
+import { publishDurable, writeDurable } from "./durable-files.js";
 import { networkInterfaces } from "node:os";
 import { JsonStore } from "./store.js";
 import { pickNext, eligibleScenes } from "./scheduler.js";
@@ -324,7 +323,7 @@ export async function createWallServer( {
 					);
 
 					if ( html ) {
-						await rename( file.path, target );
+						await publishDurable( file.path, target );
 					} else {
 						let converted;
 
@@ -334,9 +333,7 @@ export async function createWallServer( {
 							skipped++;continue;
 						}
 
-						await writeFile(
-							target, converted, { flag: "wx" }
-						);
+						await writeDurable( target, converted );
 					}
 
 					completed.push( target );
