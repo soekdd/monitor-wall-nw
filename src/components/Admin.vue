@@ -41,6 +41,13 @@ const types = [ {
 }, {
 	value: "google-picker", title: "Google Photos · Picker-Import", icon: "mdi-image-plus-outline"
 } ];
+const priorities = [
+	{ title: "sehr selten", value: 1 },
+	{ title: "selten", value: 2 },
+	{ title: "mittel", value: 3 },
+	{ title: "oft", value: 4 },
+	{ title: "sehr oft", value: 5 }
+];
 const positions = [ { title: "Oben links", value: "top-left" }, { title: "Oben mittig", value: "top-center" }, { title: "Oben rechts", value: "top-right" }, { title: "Unten links", value: "bottom-left" }, { title: "Unten mittig", value: "bottom-center" }, { title: "Unten rechts", value: "bottom-right" } ];
 const dayPeriods = [
 	{
@@ -542,7 +549,7 @@ watch( () => wall.config.scenes.find( s => s.id === editing.value?.id )?.sources
 	:items="dayPeriods"
 	label="Tageszeiten · leer = jederzeit"
 	multiple
-/><div class="coordinate-grid"><v-select v-model="editing.weight" :items="[ 1,2,3,4,5 ]" label="Priorität"/><v-text-field v-model.number="editing.scrollSeconds"
+/><div class="coordinate-grid"><v-select v-model="editing.weight" :items="priorities" label="Priorität"/><v-text-field v-model.number="editing.scrollSeconds"
 	label="Panorama-Scrollzyklus"
 	suffix="s"
 	type="number"
