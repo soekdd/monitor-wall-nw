@@ -52,8 +52,17 @@ export const monitorSchema = z.object( {
 	id,
 	name: z.string().min( 1 )
 		.max( 100 ),
-	displayId: z.string().nullable(),
-	x:         z.number().int()
+	displayId:     z.string().nullable(),
+	displayBounds: z.object( {
+		x:     z.number().int(),
+		y:     z.number().int(),
+		width: z.number().int()
+			.positive(),
+		height: z.number().int()
+			.positive()
+	} ).nullable()
+		.optional(),
+	x: z.number().int()
 		.min( -20000 )
 		.max( 20000 ),
 	y: z.number().int()

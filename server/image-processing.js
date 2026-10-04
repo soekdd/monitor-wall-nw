@@ -1,5 +1,7 @@
 import sharp from "sharp";
 
+const webpMaximumDimension = 16383;
+
 export const isStack = type => [ "stack", "google-picker", "google-photos" ].includes( type );
 
 export async function webpImage( input, type = "fit" ) {
@@ -17,6 +19,10 @@ export async function webpImage( input, type = "fit" ) {
 	if ( isStack( type ) ) {
 		image.resize( {
 			width: 1600, height: 1600, fit: "inside", withoutEnlargement: true
+		} );
+	} else if ( metadata.width > webpMaximumDimension || ( metadata.pageHeight || metadata.height ) > webpMaximumDimension ) {
+		image.resize( {
+			width: webpMaximumDimension, height: webpMaximumDimension, fit: "inside", withoutEnlargement: true
 		} );
 	}
 

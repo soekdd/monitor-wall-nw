@@ -1,7 +1,7 @@
 import {
 	BrowserWindow, ipcMain, screen
 } from "electron";
-import { findDisplay } from "./displays.js";
+import { matchDisplays } from "./displays.js";
 
 const controllers = new WeakMap();
 
@@ -64,7 +64,7 @@ export function installWindowMode( win, { origin, config } ) {
 					bounds: win.getNormalBounds(), maximized: win.isMaximized(), menu: win.isMenuBarVisible()
 				};
 				const monitor = config().monitors.find( m => m.enabled && m.id === url.searchParams.get( "monitor" ) );
-				const display = findDisplay( screen.getAllDisplays(), monitor ) || screen.getDisplayMatching( win.getBounds() );
+				const display = matchDisplays( screen.getAllDisplays(), config().monitors.filter( m => m.enabled && m.displayId ) ).get( monitor?.id ) || screen.getDisplayMatching( win.getBounds() );
 
 				if ( win.isMaximized() ) {
 					win.unmaximize();

@@ -8,7 +8,7 @@ import path from "node:path";
 import { googleLink } from "../server/google-photos.js";
 import { createWallServer } from "../server/app.js";
 import { editMenu, installEditingContextMenu } from "./editing.js";
-import { displayName, findDisplay } from "./displays.js";
+import { displayName, matchDisplays } from "./displays.js";
 import { installWindowMode } from "./window-mode.js";
 const windows = new Map();
 const pidFile = path.join( app.getPath( "userData" ), "monitor-wall.pid" );
@@ -71,9 +71,10 @@ if ( !app.requestSingleInstanceLock() ) {
 
 		function sync( config ) {
 			const displays = screen.getAllDisplays();
+			const matches = matchDisplays( displays, config.monitors.filter( m => m.enabled && m.displayId ) );
 
 			for ( const [ id, win ] of windows ) {
-				const m = config.monitors.find( m => m.id === id && m.enabled );const d = findDisplay( displays, m );
+				const m = config.monitors.find( m => m.id === id && m.enabled );const d = m && matches.get( m.id );
 
 				if ( !d ) {
 					win.close();windows.delete( id );
@@ -83,7 +84,7 @@ if ( !app.requestSingleInstanceLock() ) {
 			}
 
 			for ( const m of config.monitors.filter( m => m.enabled && m.displayId ) ) {
-				const d = findDisplay( displays, m );
+				const d = matches.get( m.id );
 
 				if ( d && !windows.has( m.id ) ) {
 					const win = createWindow( {
@@ -96,6 +97,28 @@ if ( !app.requestSingleInstanceLock() ) {
 		service = await createWallServer( {
 			directory: process.env.WALL_DATA_DIR || path.join( app.getPath( "userData" ), "data" ), port, frontend: process.env.WALL_DEV === "1", dist: path.join( app.getAppPath(), "dist" ), googleCredentialsDirectory: path.join( app.getAppPath(), "config" ), googleCredentialsFile: process.env.WALL_GOOGLE_OAUTH_FILE, googlePickerCredentialsFile: process.env.WALL_GOOGLE_PICKER_OAUTH_FILE, displays: available, onDisplays: sync
 		} );
+		const detected = screen.getAllDisplays();
+		const assigned = service.store.config.monitors.filter( m => m.enabled && m.displayId );
+		const matches = matchDisplays( detected, assigned );
+		const assignmentsChanged = assigned.some( monitor => {
+			const display = matches.get( monitor.id );
+
+			return display && ( monitor.displayId !== String( display.id ) || JSON.stringify( monitor.displayBounds ) !== JSON.stringify( display.bounds ) );
+		} );
+
+		if ( assignmentsChanged ) {
+			await service.store.modifyConfig( config => {
+				for ( const monitor of config.monitors ) {
+					const display = matches.get( monitor.id );
+
+					if ( display ) {
+						monitor.displayId = String( display.id );monitor.displayBounds = { ...display.bounds };
+					}
+				}
+
+				return config;
+			} );
+		}
 
 		showAdmin = () => {
 			if ( !admin ) {

@@ -77,7 +77,11 @@ watch( () => tab.value, () => {
 	}
 
 	if ( tab.value === "monitors" ) {
-		monitorDraft.value = clone( wall.config.monitors );
+		monitorDraft.value = clone( wall.config.monitors ).map( monitor => {
+			const display = wall.displays.find( d => d.id === monitor.displayId );
+
+			return { ...monitor, displayBounds: display ? clone( display.bounds ) : monitor.displayBounds };
+		} );
 	}
 } );
 
@@ -220,7 +224,7 @@ async function toggleWidget( w, value ) {
 }
 
 function assignDisplay( m, id ) {
-	const d = wall.displays.find( d => d.id === id );m.displayId = id;
+	const d = wall.displays.find( d => d.id === id );m.displayId = id;m.displayBounds = d ? clone( d.bounds ) : null;
 
 	if ( d ) {
 		m.width = d.bounds.width;m.height = d.bounds.height;m.x = d.bounds.x;m.y = d.bounds.y;
@@ -229,12 +233,20 @@ function assignDisplay( m, id ) {
 
 function addMonitor() {
 	monitorDraft.value.push( {
-		id: createId(), name: `Monitor ${monitorDraft.value.length + 1}`, displayId: null, x: monitorDraft.value.reduce( ( n, m ) => Math.max( n, m.x + m.width ), 0 ), y: 0, width: 1600, height: 900, enabled: true
+		id: createId(), name: `Monitor ${monitorDraft.value.length + 1}`, displayId: null, displayBounds: null, x: monitorDraft.value.reduce( ( n, m ) => Math.max( n, m.x + m.width ), 0 ), y: 0, width: 1600, height: 900, enabled: true
 	} );
 }
 
 async function saveMonitors() {
 	const config = clone( wall.config );config.monitors = clone( monitorDraft.value );
+
+	for ( const monitor of config.monitors ) {
+		const display = wall.displays.find( d => d.id === monitor.displayId );
+
+		if ( display ) {
+			monitor.displayBounds = clone( display.bounds );
+		}
+	}
 
 	if ( new Set( config.monitors.filter( m => m.displayId && m.enabled ).map( m => m.displayId ) ).size !== config.monitors.filter( m => m.displayId && m.enabled ).length ) {
 		wall.error = "Ein physischer Bildschirm kann nur einem Monitor zugeordnet werden.";return;

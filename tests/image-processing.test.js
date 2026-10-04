@@ -44,6 +44,18 @@ test( "panoramas keep their dimensions and EXIF orientation is applied", async()
 	await assert.rejects( webpImage( Buffer.from( "invalid image" ) ) );
 } );
 
+test( "images wider than WebP supports are scaled down proportionally", async() => {
+	const oversized = await sharp( {
+		create: {
+			width: 16384, height: 10, channels: 3, background: "blue"
+		}
+	} ).jpeg()
+		.toBuffer();
+	const metadata = await sharp( await webpImage( oversized, "fit" ) ).metadata();
+
+	assert.equal( metadata.width, 16383 );assert.equal( metadata.height, 10 );
+} );
+
 
 test( "upload and URL endpoints produce WebP with the requested scene dimensions", async t => {
 	const directory = await mkdtemp( path.join( tmpdir(), "wall-webp-" ) );
