@@ -19,11 +19,20 @@ export function createId() {
 }
 
 export function mediaUrl( url ) {
-	return url?.startsWith( "/media/" ) || url?.startsWith( "/api/google-photos/media/" ) ? `${url}?password=${encodeURIComponent( password )}` : url;
+	return url?.startsWith( "/media/" ) || url?.startsWith( "/api/google-photos/media/" ) ? `${url}${url.includes( "?" ) ? "&" : "?"}password=${encodeURIComponent( password )}` : url;
 }
 
 export function sceneSources( scene ) {
 	return scene?.type === "google-photos" ? wall.googlePhotos?.galleries?.[ scene.id ]?.sources || [] : scene?.sources || [];
+}
+
+export function sceneThumbnail( scene ) {
+	if ( scene?.thumbnail ) {
+		return scene.thumbnail;
+	}
+
+	const source = sceneSources( scene )[ 0 ];
+	return scene?.type === "google-photos" && source ? `${source}?thumbnail=1` : source;
 }
 
 export async function request(
@@ -64,9 +73,11 @@ export async function action( action, id ) {
 	}
 }
 
-export async function save( config ) {
+export async function save( config, activateId ) {
 	const response = await request(
-		"/config", "PUT", { config, revision: wall.state.revision }
+		"/config", "PUT", {
+			config, revision: wall.state.revision, ...activateId ? { activateId } : {}
+		}
 	);Object.assign( wall, response );
 }
 

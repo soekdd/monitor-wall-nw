@@ -65,9 +65,15 @@ test( "authenticated API controls, optimistic concurrency, uploads, secrets and 
 		"/api/control", "POST", { action: "pause" }
 	) ).status, 200 );assert.equal( service.snapshot().state.paused, true );assert.equal( service.snapshot().state.sceneRevision, state.state.sceneRevision );assert.equal( ( await req(
 		"/api/control", "POST", { action: "select", id: state.config.scenes[ 0 ].id }
-	) ).status, 200 );assert.equal( service.snapshot().state.sceneRevision, state.state.sceneRevision + 1 );const saved = await req(
-		"/api/config", "PUT", { config: { ...state.config, name: "Family" }, revision: state.state.revision }
-	);assert.equal( saved.status, 200 );assert.equal( ( await req(
+	) ).status, 200 );assert.equal( service.snapshot().state.sceneRevision, state.state.sceneRevision + 1 );const activated = state.config.scenes[ 1 ];const saved = await req(
+		"/api/config", "PUT", {
+			config: { ...state.config, name: "Family" }, revision: state.state.revision, activateId: activated.id
+		}
+	);assert.equal( saved.status, 200 );const savedState = await saved.json();assert.equal( savedState.state.currentId, activated.id );assert.equal( savedState.state.sceneRevision, state.state.sceneRevision + 2 );const disabledConfig = structuredClone( savedState.config );disabledConfig.scenes.find( scene => scene.id === activated.id ).enabled = false;const disabledSave = await req(
+		"/api/config", "PUT", {
+			config: disabledConfig, revision: savedState.state.revision, activateId: activated.id
+		}
+	);assert.equal( disabledSave.status, 200 );assert.notEqual( ( await disabledSave.json() ).state.currentId, activated.id );assert.equal( ( await req(
 		"/api/config", "PUT", { config: state.config, revision: 0 }
 	) ).status, 409 );assert.equal( ( await req(
 		"/api/control", "POST", { action: "select", id: "missing" }

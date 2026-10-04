@@ -1,4 +1,4 @@
-import { webpImage } from "./image-processing.js";
+import { thumbnailImage, webpImage } from "./image-processing.js";
 import { writeFile } from "node:fs/promises";
 import {
 	randomUUID, randomBytes, createHash
@@ -325,6 +325,7 @@ export class GooglePicker extends GooglePhotos {
 		scene, session, job
 	) {
 		const media = path.join( this.wallStore.directory, "media" ), staging = path.join( media, `.picker-${randomUUID()}` ), files = [];
+		let thumbnail;
 		await mkdir( staging, { recursive: true } );let committed = false;
 
 		try {
@@ -431,6 +432,12 @@ export class GooglePicker extends GooglePhotos {
 				await rename( path.join( staging, name ), path.join( media, name ) );
 			}
 
+			const thumbnailName = `thumbnail-${randomUUID()}.webp`;
+			thumbnail = path.join( media, thumbnailName );await writeFile(
+				thumbnail, await thumbnailImage( path.join( media, files[ 0 ] ) ), { flag: "wx", mode: 0o600 }
+			);
+			let oldThumbnail;
+
 			await this.wallStore.modifyConfig( config => {
 				const target = config.scenes.find( s => s.id === scene.id && s.type === "google-picker" && s.apiId === scene.apiId );
 
@@ -438,9 +445,15 @@ export class GooglePicker extends GooglePhotos {
 					throw fail( "Die Szene wurde während des Imports verändert. Der bisherige Stapel bleibt erhalten.", 409 );
 				}
 
-				target.sources = files.map( name => `/media/${name}` );return config;
+				oldThumbnail = target.thumbnail;target.sources = files.map( name => `/media/${name}` );target.thumbnail = `/media/${thumbnailName}`;return config;
 			} );
-			committed = true;job.status = "done";this.onImport( true );
+			committed = true;
+
+			if ( oldThumbnail?.startsWith( "/media/thumbnail-" ) ) {
+				await rm( path.join( media, oldThumbnail.slice( "/media/".length ) ), { force: true } );
+			}
+
+			job.status = "done";this.onImport( true );
 
 			// Imported files are durable; session cleanup must not undo a completed import.
 			try {
@@ -452,7 +465,7 @@ export class GooglePicker extends GooglePhotos {
 			await rm( staging, { recursive: true, force: true } );
 
 			if ( !committed ) {
-				await Promise.all( files.map( name => rm( path.join( media, name ), { force: true } ) ) );
+				await Promise.all( [ ...files.map( name => path.join( media, name ) ), thumbnail ].filter( Boolean ).map( file => rm( file, { force: true } ) ) );
 			}
 		}
 	}

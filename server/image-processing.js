@@ -29,6 +29,16 @@ export async function webpImage( input, type = "fit" ) {
 	return image.webp( { quality: 85, effort: 4 } ).toBuffer();
 }
 
+export async function thumbnailImage( input ) {
+	return sharp( input )
+		.rotate()
+		.resize( {
+			width: 640, height: 390, fit: "cover", position: "attention", withoutEnlargement: true
+		} )
+		.webp( { quality: 78, effort: 4 } )
+		.toBuffer();
+}
+
 export async function imageResponseBytes( response, maxBytes = 50 * 1024 * 1024 ) {
 	if ( Number( response.headers.get( "content-length" ) ) > maxBytes ) {
 		throw Object.assign( new Error( "Das Bild ist zu groß (maximal 50 MB)." ), { status: 413 } );

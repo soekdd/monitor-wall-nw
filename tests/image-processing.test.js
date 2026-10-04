@@ -8,7 +8,7 @@ import path from "node:path";
 import { tmpdir } from "node:os";
 import { createWallServer } from "../server/app.js";
 import { downloadImage } from "../server/image-import.js";
-import { webpImage } from "../server/image-processing.js";
+import { thumbnailImage, webpImage } from "../server/image-processing.js";
 
 const image = ( width, height ) => sharp( {
 	create: {
@@ -56,6 +56,12 @@ test( "images wider than WebP supports are scaled down proportionally", async() 
 	assert.equal( metadata.width, 16383 );assert.equal( metadata.height, 10 );
 } );
 
+test( "media library thumbnails are cropped to the card size", async() => {
+	const metadata = await sharp( await thumbnailImage( await image( 4000, 800 ) ) ).metadata();
+
+	assert.equal( metadata.format, "webp" );assert.equal( metadata.width, 640 );assert.equal( metadata.height, 390 );
+} );
+
 
 test( "upload and URL endpoints produce WebP with the requested scene dimensions", async t => {
 	const directory = await mkdtemp( path.join( tmpdir(), "wall-webp-" ) );
@@ -80,6 +86,23 @@ test( "upload and URL endpoints produce WebP with the requested scene dimensions
 		const metadata = await sharp( await readFile( path.join( directory, sources[ 0 ] ) ) ).metadata();
 		assert.equal( metadata.width, type === "stack" ? 1600 : 2400 );assert.equal( metadata.height, type === "stack" ? 800 : 1200 );
 	}
+
+	const stateResponse = await fetch( `${base}/api/state`, { headers: { Authorization: `Bearer ${service.password}` } } );
+	const state = await stateResponse.json();
+	const panoramaForm = new FormData();panoramaForm.append( "type", "panorama" );panoramaForm.append(
+		"files", new Blob( [ await image( 4000, 800 ) ], { type: "image/png" } ), "wide.png"
+	);
+	const panoramaUpload = await fetch( `${base}/api/upload`, {
+		method: "POST", headers: { Authorization: `Bearer ${service.password}` }, body: panoramaForm
+	} );
+	const panorama = await panoramaUpload.json();state.config.scenes.push( {
+		id: "wide", title: "Wide", type: "panorama", category: "Test", sources: panorama.sources, enabled: true, weight: 3, seasons: [], hours: [], scrollSeconds: 90
+	} );
+	const saved = await fetch( `${base}/api/config`, {
+		method: "PUT", headers: { Authorization: `Bearer ${service.password}`, "Content-Type": "application/json" }, body: JSON.stringify( { config: state.config, revision: state.state.revision } )
+	} );
+	assert.equal( saved.status, 200 );const savedState = await saved.json();const thumbnail = savedState.config.scenes.find( scene => scene.id === "wide" ).thumbnail;
+	assert.match( thumbnail, /^\/media\/thumbnail-.*\.webp$/ );const thumbnailMetadata = await sharp( await readFile( path.join( directory, thumbnail ) ) ).metadata();assert.equal( thumbnailMetadata.width, 640 );assert.equal( thumbnailMetadata.height, 390 );
 
 	const source = await downloadImage(
 		"https://example.com/photo", path.join( directory, "media" ), { type: "stack", fetchImpl: async() => new Response( bytes, { headers: { "content-type": "image/png" } } ) }

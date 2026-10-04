@@ -1,3 +1,3 @@
 import { controlService } from "./systemd-service.js";
 
-await controlService( "stop" );
+await controlService( "restart" );

@@ -2,7 +2,6 @@ import { webpImage, imageResponseBytes } from "./image-processing.js";
 import { randomUUID, createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { retryDelay } from "./retry.js";
 
 const API = "https://photosambient.googleapis.com/v1";
 const SCOPE = "https://www.googleapis.com/auth/photosambient.mediaitems";
@@ -44,7 +43,7 @@ export class GooglePhotos {
 	} = {} ) {
 		this.store = store; this.fetch = fetchImpl; this.now = now;
 		this.scope = scope;
-		this.galleries = {}; this.auth = null; this.access = null; this.tokenRequest = null; this.pending = new Map(); this.nextRefresh = new Map(); this.listRequests = new Map(); this.reached = new Set();
+		this.galleries = {}; this.auth = null; this.access = null; this.tokenRequest = null; this.pending = new Map(); this.nextRefresh = new Map(); this.listRequests = new Map();
 	}
 	get credentials() {
 		return this.store.secrets.googlePhotos || {};
@@ -352,7 +351,7 @@ export class GooglePhotos {
 		await this.store.updateSecrets( s => {
 			const devices = { ...s.googlePhotos?.devices }; delete devices[ id ]; return { ...s, googlePhotos: { ...s.googlePhotos, devices } };
 		} );
-		delete this.galleries[ id ]; this.nextRefresh.delete( id );this.reached.delete( id );
+		delete this.galleries[ id ]; this.nextRefresh.delete( id );
 	}
 	async refresh( scene, force = false ) {
 		const binding = this.credentials.devices?.[ scene.id ];
@@ -385,8 +384,6 @@ export class GooglePhotos {
 				if ( !googleLink( device.settingsUri ) ) {
 					throw fail( "Ungültiger Google-Photos-Konfigurationslink.", 502 );
 				}
-
-				this.reached.add( scene.id );
 
 				const info = {
 					mediaSourceId: scene.googlePhotos?.mediaSourceId || "", settingsUri: device.settingsUri, albums: ( device.mediaSources || [] ).map( a => ( { id: a.id, displayName: a.displayName } ) ), lastAttempt: this.now()
@@ -428,9 +425,6 @@ export class GooglePhotos {
 					...info, status: items.size ? "ok" : "empty", updatedAt: this.now(), sources: [ ...items.keys() ].map( key => `/api/google-photos/media/${scene.id}/${key}` ), items, limited: !!( scene.googlePhotos?.mediaSourceId && pageToken )
 				};
 			} catch( e ) {
-				this.nextRefresh.set( scene.id, this.now() + retryDelay(
-					this.reached.has( scene.id ), 60000, e
-				) );
 				const sources = !sourceChanged && old?.updatedAt > this.now() - 50 * 60000 ? old.sources : [];
 				return this.galleries[ scene.id ] = {
 					...old, mediaSourceId: scene.googlePhotos?.mediaSourceId || "", items: sourceChanged ? undefined : old?.items, sources: sources || [], status: "error", lastAttempt: this.now(), error: e.message

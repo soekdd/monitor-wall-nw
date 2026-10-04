@@ -5,29 +5,19 @@ import { timingSafeEqual, randomUUID } from "node:crypto";
 import {
 	rename, rm, writeFile
 } from "node:fs/promises";
-import { thumbnailImage, webpImage } from "./image-processing.js";
+import { webpImage } from "./image-processing.js";
 import { networkInterfaces } from "node:os";
 import { JsonStore } from "./store.js";
 import { pickNext, eligibleScenes } from "./scheduler.js";
 import { loadWidget } from "./providers.js";
 import { ApiConnections } from "./api-connections.js";
 import { downloadImage } from "./image-import.js";
-import { retryDelay } from "./retry.js";
-import { prepareSceneThumbnails, removeThumbnails } from "./thumbnails.js";
 
 export async function createWallServer( {
 	directory, port = 3210, host = "0.0.0.0", frontend, dist, displays = () => [], onDisplays = () => {}, photosOptions = {}, googleCredentialsDirectory, googleCredentialsFile, googlePickerCredentialsFile
 } ) {
 	const store = await new JsonStore( directory ).init();
-	const initialThumbnails = await prepareSceneThumbnails(
-		store.config, store.config, { directory, dist }
-	);
-
-	if ( JSON.stringify( initialThumbnails.config ) !== JSON.stringify( store.config ) ) {
-		await store.update( initialThumbnails.config );
-	}
-
-	const password = store.access.password, app = express(), clients = new Set(), results = {}, pending = new Set(), nextPoll = new Map(), successfulPolls = new Set();
+	const password = store.access.password, app = express(), clients = new Set(), results = {}, pending = new Set(), lastPoll = new Map();
 	const connections = new ApiConnections(
 		store, photosOptions, committed => {
 			if ( committed ) {
@@ -129,7 +119,7 @@ export async function createWallServer( {
 	} );
 	app.get( "/api/apis/status", ( _req, res ) => res.json( connections.status() ) );
 	app.put( "/api/apis/:id/secrets", async( req, res ) => {
-		await connections.saveSecrets( req.params.id, req.body );nextPoll.clear();res.json( { ok: true } );broadcast();void refresh();
+		await connections.saveSecrets( req.params.id, req.body );lastPoll.clear();res.json( { ok: true } );broadcast();void refresh();
 	} );
 	app.post( "/api/apis/:id/credentials/file", async( req, res ) => {
 		const client = connections.client( req.params.id );await client.loadCredentials( googleCredentialsDirectory, [ "google-picker", "calendar" ].includes( connections.definition( req.params.id ).type ) ? googlePickerCredentialsFile : googleCredentialsFile );
@@ -204,7 +194,7 @@ export async function createWallServer( {
 
 		const controller = new AbortController();res.on( "close", () => controller.abort() );const response = await connections.forScene( scene ).image(
 			scene.id, req.params.key, AbortSignal.any( [ controller.signal, AbortSignal.timeout( 20000 ) ] )
-		);const bytes = Buffer.from( await response.arrayBuffer() );res.setHeader( "Content-Type", "image/webp" );res.send( req.query.thumbnail === "1" ? await thumbnailImage( bytes ) : bytes );
+		);res.setHeader( "Content-Type", "image/webp" );res.send( Buffer.from( await response.arrayBuffer() ) );
 	} );
 	app.get( "/api/state", ( _req, res ) => res.json( snapshot() ) );
 	app.get( "/api/events", ( req, res ) => {
@@ -217,18 +207,10 @@ export async function createWallServer( {
 
 		saving = true;
 
-		let thumbnails, stored = false;
-
 		try {
-			connections.assertConfigChange( req.body.config );thumbnails = await prepareSceneThumbnails(
-				req.body.config, store.config, { directory, dist }
-			);await store.update( thumbnails.config );stored = true;await removeThumbnails( thumbnails.obsolete );state.revision++;
+			connections.assertConfigChange( req.body.config );await store.update( req.body.config );state.revision++;
 
-			const activated = req.body.activateId && playbackConfig().scenes.find( scene => scene.id === req.body.activateId && scene.enabled && scene.sources.length );
-
-			if ( activated ) {
-				state.currentId = activated.id;state.changedAt = Date.now();state.sceneRevision++;
-			} else if ( !eligibleScenes( playbackConfig() ).some( s => s.id === state.currentId ) ) {
+			if ( !eligibleScenes( playbackConfig() ).some( s => s.id === state.currentId ) ) {
 				const next = pickNext( playbackConfig(), null );
 
 				if ( next !== state.currentId ) {
@@ -238,13 +220,7 @@ export async function createWallServer( {
 				state.currentId = next;state.changedAt = Date.now();
 			}
 
-			nextPoll.clear();await onDisplays( store.config );broadcast();res.json( snapshot() );void refresh();
-		} catch( error ) {
-			if ( !stored && thumbnails?.created ) {
-				await removeThumbnails( thumbnails.created );
-			}
-
-			throw error;
+			lastPoll.clear();await onDisplays( store.config );broadcast();res.json( snapshot() );void refresh();
 		} finally {
 			saving = false;
 		}
@@ -279,7 +255,7 @@ export async function createWallServer( {
 				state.pausedAt = state.changedAt;
 			}
 		} else if ( action === "refresh" ) {
-			nextPoll.clear();void refresh();
+			lastPoll.clear();void refresh();
 		} else {
 			return res.status( 400 ).json( { error: "Unbekannter Befehl" } );
 		}
@@ -293,7 +269,7 @@ export async function createWallServer( {
 			return res.status( 404 ).json( { error: "API-Verbindung nicht gefunden" } );
 		}
 
-		await connections.saveSecrets( widget.apiId, req.body );nextPoll.clear();res.json( { ok: true } );void refresh();
+		await connections.saveSecrets( widget.apiId, req.body );lastPoll.clear();res.json( { ok: true } );void refresh();
 	} );
 	const upload = multer( {
 		storage: multer.diskStorage( {
@@ -438,11 +414,11 @@ export async function createWallServer( {
 		}
 
 		await Promise.allSettled( store.config.widgets.filter( w => w.enabled && ![ "clock", "title" ].includes( w.type ) ).map( async w => {
-			if ( pending.has( w.id ) || ( nextPoll.get( w.id ) || 0 ) > Date.now() ) {
+			if ( pending.has( w.id ) || Date.now() - ( lastPoll.get( w.id ) || 0 ) < w.refreshSeconds * 1000 ) {
 				return;
 			}
 
-			pending.add( w.id );
+			pending.add( w.id );lastPoll.set( w.id, Date.now() );
 
 			try {
 				const value = await loadWidget(
@@ -452,15 +428,13 @@ export async function createWallServer( {
 				if ( store.config.widgets.includes( w ) ) {
 					results[ w.id ] = {
 						...value, status: "ok", updatedAt: Date.now()
-					};successfulPolls.add( w.id );nextPoll.set( w.id, Date.now() + w.refreshSeconds * 1000 );changed = true;
+					};changed = true;
 				}
 			} catch( e ) {
 				if ( store.config.widgets.includes( w ) ) {
 					results[ w.id ] = {
 						...results[ w.id ], status: "error", error: e.message
-					};nextPoll.set( w.id, Date.now() + retryDelay(
-						successfulPolls.has( w.id ), w.refreshSeconds * 1000, e
-					) );changed = true;
+					};changed = true;
 				}
 			} finally {
 				pending.delete( w.id );

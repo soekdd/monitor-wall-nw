@@ -10,22 +10,7 @@ import { createWallServer } from "../server/app.js";
 import { editMenu, installEditingContextMenu } from "./editing.js";
 import { displayName, matchDisplays } from "./displays.js";
 import { installWindowMode } from "./window-mode.js";
-
 const windows = new Map();
-const runtimeDirectory = process.env.WALL_RUNTIME_DIR || path.join( process.env.XDG_RUNTIME_DIR || app.getPath( "temp" ),
-	"monitor-wall" );
-const sessionDirectory = path.join( runtimeDirectory, "session" );
-const crashDirectory = path.join( runtimeDirectory, "crash-dumps" );
-
-// Chromium's caches, session databases and crash reports are disposable in
-// kiosk operation. Keep them in RAM while userData/data remains persistent.
-for ( const directory of [ sessionDirectory, crashDirectory ] ) {
-	mkdirSync( directory, { recursive: true, mode: 0o700 } );
-}
-
-app.setPath( "sessionData", sessionDirectory );
-app.setPath( "crashDumps", crashDirectory );
-
 const pidFile = path.join( app.getPath( "userData" ), "monitor-wall.pid" );
 
 let service, admin, closing = false, showAdmin = () => {};

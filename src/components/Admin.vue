@@ -3,7 +3,7 @@ import {
 	ref, computed, watch
 } from "vue";
 import {
-	wall, action, save, request, mediaUrl, logout, sceneSources, createId
+	wall, action, save, request, mediaUrl, logout, sceneSources, sceneThumbnail, createId
 } from "../api";
 import WallCanvas from "./WallCanvas.vue";
 import GooglePhotosGallery from "./GooglePhotosGallery.vue";
@@ -85,11 +85,13 @@ watch( () => tab.value, () => {
 	}
 } );
 
-async function commit( config, message = "Gespeichert" ) {
+async function commit(
+	config, message = "Gespeichert", activateId
+) {
 	busy.value = true;
 
 	try {
-		await save( config );notice.value = message;return true;
+		await save( config, activateId );notice.value = message;return true;
 	} catch( e ) {
 		wall.error = e.message;return false;
 	} finally {
@@ -124,7 +126,9 @@ async function saveScene() {
 		config.scenes[ index ] = clone( editing.value );
 	}
 
-	if ( await commit( config, "Szene gespeichert" ) && ![ "google-photos", "google-picker" ].includes( editing.value.type ) ) {
+	if ( await commit(
+		config, "Szene gespeichert", editing.value.enabled ? editing.value.id : undefined
+	) && ![ "google-photos", "google-picker" ].includes( editing.value.type ) ) {
 		sceneDialog.value = false;
 	}
 }
@@ -396,7 +400,7 @@ watch( () => wall.config.scenes.find( s => s.id === editing.value?.id )?.sources
 				class="mini-scene"
 				:class="{ selected:s.id===current?.id }"
 				@click="action('select',s.id)"
-			><img v-if="s.type!=='html'&&sceneSources(s)[0]" alt="" :src="mediaUrl(sceneSources(s)[0])"><div v-else class="scene-placeholder"><v-icon icon="mdi-code-tags"/></div><span>{{s.title}}</span><small>{{types.find(t=>t.value===s.type)?.title}}</small></button></div></section><section class="information-summary"><div class="section-title"><h2>Im Blick</h2><v-btn aria-label="Informationen verwalten"
+			><img v-if="s.type!=='html'&&sceneThumbnail(s)" alt="" :src="mediaUrl(sceneThumbnail(s))"><div v-else class="scene-placeholder"><v-icon icon="mdi-code-tags"/></div><span>{{s.title}}</span><small>{{types.find(t=>t.value===s.type)?.title}}</small></button></div></section><section class="information-summary"><div class="section-title"><h2>Im Blick</h2><v-btn aria-label="Informationen verwalten"
 				icon="mdi-arrow-top-right"
 				size="small"
 				variant="text"
@@ -413,7 +417,7 @@ watch( () => wall.config.scenes.find( s => s.id === editing.value?.id )?.sources
 			prepend-icon="mdi-upload"
 			variant="tonal"
 			@click="chooseFiles('new')"
-		>Bilder hochladen</v-btn></div><div class="media-grid"><v-card v-for="s in scenes" :key="s.id" class="media-card"><div class="media-image" @click="editScene(s)"><img v-if="sceneSources(s)[0]&&s.type!=='html'" alt="" :src="mediaUrl(sceneSources(s)[0])"><div v-else class="scene-placeholder"><v-icon :icon="types.find(t=>t.value===s.type)?.icon" size="56"/></div><span class="media-type">{{types.find(t=>t.value===s.type)?.title}}</span><span v-if="s.id===current?.id" class="media-current">Jetzt live</span></div><div class="pa-5"><div class="d-flex align-center justify-space-between"><h3>{{s.title}}</h3><v-btn aria-label="Szene bearbeiten"
+		>Bilder hochladen</v-btn></div><div class="media-grid"><v-card v-for="s in scenes" :key="s.id" class="media-card"><div class="media-image" @click="editScene(s)"><img v-if="sceneThumbnail(s)&&s.type!=='html'" alt="" :src="mediaUrl(sceneThumbnail(s))"><div v-else class="scene-placeholder"><v-icon :icon="types.find(t=>t.value===s.type)?.icon" size="56"/></div><span class="media-type">{{types.find(t=>t.value===s.type)?.title}}</span><span v-if="s.id===current?.id" class="media-current">Jetzt live</span></div><div class="pa-5"><div class="d-flex align-center justify-space-between"><h3>{{s.title}}</h3><v-btn aria-label="Szene bearbeiten"
 			icon="mdi-pencil-outline"
 			size="small"
 			variant="text"

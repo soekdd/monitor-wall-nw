@@ -16,9 +16,10 @@ export const sceneSchema = z.object( {
 		mediaSourceId: z.string().max( 500 )
 			.optional()
 	} ).optional(),
-	sources: z.array( url ).max( 2000 ),
-	enabled: z.boolean(),
-	weight:  z.number().int()
+	thumbnail: url.optional(),
+	sources:   z.array( url ).max( 2000 ),
+	enabled:   z.boolean(),
+	weight:    z.number().int()
 		.min( 1 )
 		.max( 5 ),
 	seasons: z.array( z.enum( seasons.map( season => season.value ) ) ),

@@ -99,7 +99,7 @@ test( "corrupt photos are skipped without aborting the Picker import", async t =
 	} = await fixture( t );await ready(
 		picker, scene, google
 	);google.corruptDownload = true;await picker.beginImport( scene );await picker.jobs.get( scene.id ).promise;
-	const job = picker.jobs.get( scene.id );assert.equal( job.status, "done" );assert.equal( job.completed, 2 );assert.equal( job.skipped, 1 );assert.equal( store.config.scenes.at( -1 ).sources.length, 1 );assert.equal( ( await readdir( path.join( directory, "media" ) ) ).length, 1 );
+	const job = picker.jobs.get( scene.id ), imported = store.config.scenes.at( -1 );assert.equal( job.status, "done" );assert.equal( job.completed, 2 );assert.equal( job.skipped, 1 );assert.equal( imported.sources.length, 1 );assert.match( imported.thumbnail, /^\/media\/thumbnail-/ );assert.equal( ( await readdir( path.join( directory, "media" ) ) ).length, 2 );
 } );
 test( "shutdown aborts an active download, removes temporary files and preserves the old stack", async t => {
 	const {
