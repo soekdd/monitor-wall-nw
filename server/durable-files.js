@@ -45,14 +45,22 @@ export async function writeSynced(
 	}
 }
 
-export async function publishDurable( source, target ) {
-	await syncFile( source );
+export async function publishDurable(
+	source, target, { syncSource = true, syncParent = true } = {}
+) {
+	if ( syncSource ) {
+		await syncFile( source );
+	}
+
 	await rename( source, target );
-	await syncDirectory( path.dirname( target ) );
+
+	if ( syncParent ) {
+		await syncDirectory( path.dirname( target ) );
+	}
 }
 
 export async function writeDurable(
-	target, data, { mode = 0o600 } = {}
+	target, data, { mode = 0o600, syncParent = true } = {}
 ) {
 	const staging = `${target}.part-${process.pid}-${randomUUID()}`;
 
@@ -60,7 +68,9 @@ export async function writeDurable(
 		await writeSynced(
 			staging, data, { mode }
 		);
-		await publishDurable( staging, target );
+		await publishDurable(
+			staging, target, { syncSource: false, syncParent }
+		);
 	} finally {
 		await rm( staging, { force: true } );
 	}
