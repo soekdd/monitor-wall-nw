@@ -11,7 +11,7 @@ import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { GooglePhotos, googleLink } from "./google-photos.js";
 import {
-	publishDurable, writeDurable, writeSynced
+	publishDurable, syncDirectory, writeDurable, writeSynced
 } from "./durable-files.js";
 
 const API = "https://photospicker.googleapis.com/v1";
@@ -437,11 +437,16 @@ export class GooglePicker extends GooglePhotos {
 			}
 
 			for ( const name of files ) {
-				await publishDurable( path.join( staging, name ), path.join( media, name ) );
+				await publishDurable(
+					path.join( staging, name ), path.join( media, name ), { syncSource: false, syncParent: false }
+				);
 			}
 
 			const thumbnailName = `thumbnail-${randomUUID()}.webp`;
-			thumbnail = path.join( media, thumbnailName );await writeDurable( thumbnail, await thumbnailImage( path.join( media, files[ 0 ] ) ) );
+			thumbnail = path.join( media, thumbnailName );await writeDurable(
+				thumbnail, await thumbnailImage( path.join( media, files[ 0 ] ) ), { syncParent: false }
+			);
+			await syncDirectory( media );
 			let oldThumbnail;
 
 			await this.wallStore.modifyConfig( config => {
