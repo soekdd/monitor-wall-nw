@@ -2,7 +2,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { access, rm } from "node:fs/promises";
 import { thumbnailImage } from "./image-processing.js";
-import { writeDurable } from "./durable-files.js";
+import { syncDirectory, writeDurable } from "./durable-files.js";
 
 const thumbnailPath = ( directory, source ) => source?.startsWith( "/media/thumbnail-" ) ? path.join(
 	directory, "media", source.slice( "/media/".length )
@@ -72,7 +72,7 @@ export async function prepareSceneThumbnails(
 				throw error;
 			}
 
-			await writeDurable( target, bytes );
+			await writeDurable( target, bytes, { syncParent: false } );
 			created.push( target );scene.thumbnail = `/media/${name}`;
 		}
 
@@ -84,6 +84,10 @@ export async function prepareSceneThumbnails(
 					obsolete.push( file );
 				}
 			}
+		}
+
+		if ( created.length ) {
+			await syncDirectory( path.join( directory, "media" ) );
 		}
 
 		return {
