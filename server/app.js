@@ -4,7 +4,9 @@ import path from "node:path";
 import { timingSafeEqual, randomUUID } from "node:crypto";
 import { rm } from "node:fs/promises";
 import { thumbnailImage, webpImage } from "./image-processing.js";
-import { publishDurable, writeDurable } from "./durable-files.js";
+import {
+	publishDurable, syncDirectory, writeDurable
+} from "./durable-files.js";
 import { networkInterfaces } from "node:os";
 import { JsonStore } from "./store.js";
 import { pickNext, eligibleScenes } from "./scheduler.js";
@@ -323,7 +325,7 @@ export async function createWallServer( {
 					);
 
 					if ( html ) {
-						await publishDurable( file.path, target );
+						await publishDurable( file.path, target, { syncParent: false } );
 					} else {
 						let converted;
 
@@ -333,7 +335,7 @@ export async function createWallServer( {
 							skipped++;continue;
 						}
 
-						await writeDurable( target, converted );
+						await writeDurable( target, converted, { syncParent: false } );
 					}
 
 					completed.push( target );
@@ -343,6 +345,7 @@ export async function createWallServer( {
 					throw Object.assign( new Error( "Keine der ausgewählten Bilddateien konnte verarbeitet werden." ), { status: 415 } );
 				}
 
+				await syncDirectory( path.join( directory, "media" ) );
 				result = { sources: completed.map( f => `/media/${path.basename( f )}` ), skipped };
 			} catch( error ) {
 				await Promise.all( completed.map( f => rm( f, { force: true } ) ) );
