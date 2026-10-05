@@ -163,7 +163,7 @@ export class JsonStore {
 				}
 			}
 
-			await publishDurable( temp, dest );
+			await publishDurable( temp, dest, { syncSource: false } );
 
 			if ( !backup && ( file === "settings.json" || file === "secrets.json" ) ) {
 				await writeDurable( `${dest}.bak`, serialized );
